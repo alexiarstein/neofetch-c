@@ -7,6 +7,8 @@ int main(int argc __attribute__((unused)), char *argv[] __attribute__((unused)))
     // Gather all system information
     get_user_hostname(&info);
     get_distro(&info);
+    get_architecture(&info);
+    get_hardware(&info);
     get_kernel(&info);
     get_uptime(&info);
     get_packages(&info);
@@ -23,7 +25,6 @@ int main(int argc __attribute__((unused)), char *argv[] __attribute__((unused)))
     get_cpu(&info);
     get_gpu(&info);
     get_memory(&info);
-    get_model(&info);
     
     // Load ASCII art based on distro
     load_ascii_art(info.distro, &art);

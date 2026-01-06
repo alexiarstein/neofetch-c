@@ -68,6 +68,99 @@ void get_distro(system_info_t *info) {
     info->distro[sizeof(info->distro) - 1] = '\0';
 }
 
+void get_architecture(system_info_t *info) {
+    char *output = execute_command("uname -m");
+    if (output && strlen(output) > 0) {
+        // Remove newline and copy architecture
+        output[strcspn(output, "\n")] = '\0';
+        
+        // Map common architectures to more descriptive names
+        if (strcmp(output, "x86_64") == 0) {
+            strncpy(info->architecture, "x86-64", sizeof(info->architecture) - 1);
+        } else if (strcmp(output, "i386") == 0 || strcmp(output, "i686") == 0) {
+            strncpy(info->architecture, "x86", sizeof(info->architecture) - 1);
+        } else if (strcmp(output, "aarch64") == 0) {
+            strncpy(info->architecture, "ARM64", sizeof(info->architecture) - 1);
+        } else if (strncmp(output, "arm", 3) == 0) {
+            strncpy(info->architecture, "ARM", sizeof(info->architecture) - 1);
+        } else {
+            strncpy(info->architecture, output, sizeof(info->architecture) - 1);
+        }
+        info->architecture[sizeof(info->architecture) - 1] = '\0';
+    } else {
+        strcpy(info->architecture, "Unknown");
+    }
+}
+
+void get_hardware(system_info_t *info) {
+    char vendor[128] = "Unknown";
+    char model[128] = "Unknown";
+    
+    // Try to get vendor from DMI
+    char *vendor_output = execute_command("cat /sys/class/dmi/id/sys_vendor 2>/dev/null || cat /sys/class/dmi/id/board_vendor 2>/dev/null");
+    if (vendor_output && strlen(vendor_output) > 0) {
+        vendor_output[strcspn(vendor_output, "\n")] = '\0';
+        if (strlen(vendor_output) > 0 && strcmp(vendor_output, "To be filled by O.E.M.") != 0) {
+            strncpy(vendor, vendor_output, sizeof(vendor) - 1);
+            vendor[sizeof(vendor) - 1] = '\0';
+        }
+    }
+    
+    // Try to get model from DMI
+    char *model_output = execute_command("cat /sys/class/dmi/id/product_name 2>/dev/null || cat /sys/class/dmi/id/board_name 2>/dev/null");
+    if (model_output && strlen(model_output) > 0) {
+        model_output[strcspn(model_output, "\n")] = '\0';
+        if (strlen(model_output) > 0 && strcmp(model_output, "To be filled by O.E.M.") != 0) {
+            strncpy(model, model_output, sizeof(model) - 1);
+            model[sizeof(model) - 1] = '\0';
+        }
+    }
+    
+    // If DMI didn't work, try hostnamectl as fallback
+    if (strcmp(vendor, "Unknown") == 0 || strcmp(model, "Unknown") == 0) {
+        char *hostnamectl_output = execute_command("hostnamectl 2>/dev/null | grep -E 'Hardware (Vendor|Model)' | head -2");
+        if (hostnamectl_output && strlen(hostnamectl_output) > 0) {
+            char *line = strtok(hostnamectl_output, "\n");
+            while (line != NULL) {
+                if (strstr(line, "Hardware Vendor:") && strcmp(vendor, "Unknown") == 0) {
+                    char *vendor_start = strstr(line, ":");
+                    if (vendor_start) {
+                        vendor_start++;
+                        while (*vendor_start == ' ') vendor_start++; // Skip spaces
+                        strncpy(vendor, vendor_start, sizeof(vendor) - 1);
+                        vendor[sizeof(vendor) - 1] = '\0';
+                    }
+                } else if (strstr(line, "Hardware Model:") && strcmp(model, "Unknown") == 0) {
+                    char *model_start = strstr(line, ":");
+                    if (model_start) {
+                        model_start++;
+                        while (*model_start == ' ') model_start++; // Skip spaces
+                        strncpy(model, model_start, sizeof(model) - 1);
+                        model[sizeof(model) - 1] = '\0';
+                    }
+                }
+                line = strtok(NULL, "\n");
+            }
+        }
+    }
+    
+    // Format the hardware string for Host field (vendor only)
+    if (strcmp(vendor, "Unknown") != 0) {
+        strncpy(info->hardware, vendor, sizeof(info->hardware) - 1);
+        info->hardware[sizeof(info->hardware) - 1] = '\0';
+    } else {
+        strcpy(info->hardware, "Unknown");
+    }
+    
+    // Format the model string separately
+    if (strcmp(model, "Unknown") != 0) {
+        strncpy(info->model, model, sizeof(info->model) - 1);
+        info->model[sizeof(info->model) - 1] = '\0';
+    } else {
+        strcpy(info->model, "Unknown");
+    }
+}
+
 void get_kernel(system_info_t *info) {
     struct utsname uts;
     if (uname(&uts) == 0) {
@@ -485,9 +578,9 @@ void get_memory(system_info_t *info) {
         int percentage = (int)((double)used_mem / (double)total_mem * 100.0);
         
         // Create visual progress bar
-        const int bar_length = 10;  // Shorter bar to ensure it fits
+        const int bar_length = 8;   // Shorter bar to fit in memory field
         int filled_blocks = (percentage * bar_length) / 100;
-        char progress_bar[64];  // Buffer for the progress bar
+        char progress_bar[32];  // Smaller buffer for the progress bar
         
         // Build the progress bar with color coding using ASCII characters
         strcpy(progress_bar, "\033[36m["); // Cyan opening bracket
@@ -508,8 +601,8 @@ void get_memory(system_info_t *info) {
         
         strcat(progress_bar, "\033[36m]\033[0m"); // Cyan closing bracket + reset
         
-        snprintf(info->memory, sizeof(info->memory), "%.28s / %.28s", used_str, total_str);
-        snprintf(info->memory_bar, sizeof(info->memory_bar), "%s %d%%", progress_bar, percentage);
+        snprintf(info->memory, sizeof(info->memory), "%.12s/%.12s %s%d%%", used_str, total_str, progress_bar, percentage);
+        strcpy(info->memory_bar, ""); // Clear since we combined it
     } else {
         strncpy(info->memory, "Unknown", sizeof(info->memory) - 1);
         strncpy(info->memory_bar, "Unknown", sizeof(info->memory_bar) - 1);

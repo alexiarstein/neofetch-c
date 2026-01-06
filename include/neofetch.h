@@ -24,6 +24,8 @@ typedef struct {
     char user[64];
     char hostname[128];
     char distro[128];
+    char architecture[64];
+    char hardware[256];
     char kernel[128];
     char uptime[64];
     char packages[64];
@@ -39,7 +41,7 @@ typedef struct {
     char term_font[64];
     char cpu[256];
     char gpu[256];
-    char memory[64];
+    char memory[256];      // Increased to fit progress bar with ANSI colors
     char memory_bar[128];
     char model[128];
 } system_info_t;
@@ -57,6 +59,8 @@ typedef struct {
 /* System information gathering functions */
 void get_user_hostname(system_info_t *info);
 void get_distro(system_info_t *info);
+void get_architecture(system_info_t *info);
+void get_hardware(system_info_t *info);
 void get_kernel(system_info_t *info);
 void get_uptime(system_info_t *info);
 void get_packages(system_info_t *info);

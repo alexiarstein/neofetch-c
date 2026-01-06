@@ -465,10 +465,13 @@ int load_ascii_art(const char *distro_name, ascii_art_t *art) {
 }
 
 void print_info_with_ascii(const system_info_t *info, const ascii_art_t *art) {
-    // Prepare info lines - remove empty entries to compact display
+    // Prepare info lines - compacted to avoid empty lines
     const char *info_lines[] = {
         info->user,
         info->distro,
+        info->architecture,
+        info->hardware,
+        info->model,
         info->kernel,
         info->uptime,
         info->packages,
@@ -481,13 +484,15 @@ void print_info_with_ascii(const system_info_t *info, const ascii_art_t *art) {
         info->terminal,
         info->cpu,
         info->gpu,
-        info->memory,  // Now includes the progress bar
-        info->memory_bar // Add back as separate line since we have room
+        info->memory  // Now includes the progress bar
     };
     
-    const char *info_labels[] = {
+        const char *info_labels[] = {
         "",                // user@hostname (special case)
         "OS",
+        "Architecture",
+        "Host",
+        "Model",
         "Kernel",
         "Uptime",
         "Packages",
@@ -500,8 +505,7 @@ void print_info_with_ascii(const system_info_t *info, const ascii_art_t *art) {
         "Terminal",
         "CPU",
         "GPU",
-        "Memory",
-        "Memory Usage"
+        "Memory"         // Now includes usage bar
     };
     
     // Calculate proper spacing - use actual display width
@@ -525,7 +529,7 @@ void print_info_with_ascii(const system_info_t *info, const ascii_art_t *art) {
     info_entry_t display_entries[20];
     int entry_count = 0;
     
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < 19; i++) {  // Updated to include model field
         if (i == 0) {
             // Special case for user@hostname - always include
             display_entries[entry_count].label = "";
@@ -533,12 +537,7 @@ void print_info_with_ascii(const system_info_t *info, const ascii_art_t *art) {
             entry_count++;
         } else {
             int idx = i - 1;
-            // Always include Memory Usage (memory_bar) even if empty
-            if (strcmp(info_labels[idx], "Memory Usage") == 0) {
-                display_entries[entry_count].label = info_labels[idx];
-                display_entries[entry_count].content = info_lines[idx];
-                entry_count++;
-            } else if (strlen(info_lines[idx]) > 0 && strcmp(info_lines[idx], "Unknown") != 0) {
+            if (idx < 18 && strlen(info_lines[idx]) > 0 && strcmp(info_lines[idx], "Unknown") != 0) {  // Updated bounds check
                 display_entries[entry_count].label = info_labels[idx];
                 display_entries[entry_count].content = info_lines[idx];
                 entry_count++;
