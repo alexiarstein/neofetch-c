@@ -1,0 +1,539 @@
+#include "neofetch.h"
+
+void get_user_hostname(system_info_t *info) {
+    // Get username
+    struct passwd *pw = getpwuid(getuid());
+    if (pw) {
+        strncpy(info->user, pw->pw_name, sizeof(info->user) - 1);
+        info->user[sizeof(info->user) - 1] = '\0';
+    } else {
+        strncpy(info->user, "unknown", sizeof(info->user) - 1);
+    }
+    
+    // Get hostname
+    if (gethostname(info->hostname, sizeof(info->hostname)) != 0) {
+        strncpy(info->hostname, "unknown", sizeof(info->hostname) - 1);
+    }
+    info->hostname[sizeof(info->hostname) - 1] = '\0';
+}
+
+void get_distro(system_info_t *info) {
+    FILE *file;
+    char line[256];
+    char id[64] = {0};
+    char version_id[64] = {0};
+    char pretty_name[128] = {0};
+    
+    // Try to read /etc/os-release
+    file = fopen("/etc/os-release", "r");
+    if (!file) {
+        file = fopen("/usr/lib/os-release", "r");
+    }
+    
+    if (file) {
+        while (fgets(line, sizeof(line), file)) {
+            if (strncmp(line, "PRETTY_NAME=", 12) == 0) {
+                sscanf(line, "PRETTY_NAME=\"%127[^\"]\"", pretty_name);
+            } else if (strncmp(line, "NAME=", 5) == 0) {
+                sscanf(line, "NAME=\"%63[^\"]\"", id);
+            } else if (strncmp(line, "VERSION_ID=", 11) == 0) {
+                sscanf(line, "VERSION_ID=\"%63[^\"]\"", version_id);
+            }
+        }
+        fclose(file);
+        
+        if (strlen(pretty_name) > 0) {
+            strncpy(info->distro, pretty_name, sizeof(info->distro) - 1);
+        } else if (strlen(id) > 0) {
+            if (strlen(version_id) > 0) {
+                snprintf(info->distro, sizeof(info->distro), "%s %s", id, version_id);
+            } else {
+                strncpy(info->distro, id, sizeof(info->distro) - 1);
+            }
+        }
+        info->distro[sizeof(info->distro) - 1] = '\0';
+        return;
+    }
+    
+    // Fallback: try lsb_release
+    char *result = execute_command("lsb_release -d 2>/dev/null | cut -f2");
+    if (result && strlen(result) > 0) {
+        strncpy(info->distro, result, sizeof(info->distro) - 1);
+        info->distro[sizeof(info->distro) - 1] = '\0';
+        return;
+    }
+    
+    // Last resort
+    strncpy(info->distro, "Linux", sizeof(info->distro) - 1);
+    info->distro[sizeof(info->distro) - 1] = '\0';
+}
+
+void get_kernel(system_info_t *info) {
+    struct utsname uts;
+    if (uname(&uts) == 0) {
+        // Truncate to fit in buffer
+        snprintf(info->kernel, sizeof(info->kernel), "%.60s %.60s", uts.sysname, uts.release);
+    } else {
+        strncpy(info->kernel, "Unknown", sizeof(info->kernel) - 1);
+    }
+    info->kernel[sizeof(info->kernel) - 1] = '\0';
+}
+
+void get_uptime(system_info_t *info) {
+    struct sysinfo s_info;
+    if (sysinfo(&s_info) == 0) {
+        format_uptime(s_info.uptime, info->uptime, sizeof(info->uptime));
+    } else {
+        strncpy(info->uptime, "Unknown", sizeof(info->uptime) - 1);
+    }
+    info->uptime[sizeof(info->uptime) - 1] = '\0';
+}
+
+void get_packages(system_info_t *info) {
+    int total_packages = 0;
+    char *result;
+    
+    // Check various package managers
+    
+    // dpkg (Debian/Ubuntu)
+    result = execute_command("dpkg -l 2>/dev/null | grep '^ii' | wc -l");
+    if (result && atoi(result) > 0) {
+        total_packages += atoi(result);
+    }
+    
+    // rpm (Red Hat/Fedora)
+    result = execute_command("rpm -qa 2>/dev/null | wc -l");
+    if (result && atoi(result) > 0) {
+        total_packages += atoi(result);
+    }
+    
+    // pacman (Arch)
+    result = execute_command("pacman -Q 2>/dev/null | wc -l");
+    if (result && atoi(result) > 0) {
+        total_packages += atoi(result);
+    }
+    
+    // emerge (Gentoo)
+    result = execute_command("ls -d /var/db/pkg/*/* 2>/dev/null | wc -l");
+    if (result && atoi(result) > 0) {
+        total_packages += atoi(result);
+    }
+    
+    // xbps (Void Linux)
+    result = execute_command("xbps-query -l 2>/dev/null | wc -l");
+    if (result && atoi(result) > 0) {
+        total_packages += atoi(result);
+    }
+    
+    // apk (Alpine)
+    result = execute_command("apk list --installed 2>/dev/null | wc -l");
+    if (result && atoi(result) > 0) {
+        total_packages += atoi(result);
+    }
+    
+    if (total_packages > 0) {
+        snprintf(info->packages, sizeof(info->packages), "%d", total_packages);
+    } else {
+        strncpy(info->packages, "Unknown", sizeof(info->packages) - 1);
+    }
+    info->packages[sizeof(info->packages) - 1] = '\0';
+}
+
+void get_shell(system_info_t *info) {
+    char *shell = getenv("SHELL");
+    if (shell) {
+        // Extract just the shell name from the path
+        char *shell_name = strrchr(shell, '/');
+        if (shell_name) {
+            shell_name++; // Skip the '/'
+            strncpy(info->shell, shell_name, sizeof(info->shell) - 1);
+        } else {
+            strncpy(info->shell, shell, sizeof(info->shell) - 1);
+        }
+        info->shell[sizeof(info->shell) - 1] = '\0';
+    } else {
+        strncpy(info->shell, "Unknown", sizeof(info->shell) - 1);
+    }
+}
+
+void get_resolution(system_info_t *info) {
+    char *result;
+    
+    // Try xrandr first (for X11)
+    result = execute_command("xrandr --current 2>/dev/null | grep ' connected' | grep -o '[0-9]\\+x[0-9]\\+' | head -1");
+    if (result && strlen(result) > 0) {
+        strncpy(info->resolution, result, sizeof(info->resolution) - 1);
+        info->resolution[sizeof(info->resolution) - 1] = '\0';
+        return;
+    }
+    
+    // Try wlr-randr (for Wayland)
+    result = execute_command("wlr-randr 2>/dev/null | grep -o '[0-9]\\+x[0-9]\\+' | head -1");
+    if (result && strlen(result) > 0) {
+        strncpy(info->resolution, result, sizeof(info->resolution) - 1);
+        info->resolution[sizeof(info->resolution) - 1] = '\0';
+        return;
+    }
+    
+    // Check /sys/class/drm
+    result = execute_command("find /sys/class/drm/*/modes -type f -exec cat {} \\; 2>/dev/null | head -1");
+    if (result && strlen(result) > 0) {
+        strncpy(info->resolution, result, sizeof(info->resolution) - 1);
+        info->resolution[sizeof(info->resolution) - 1] = '\0';
+        return;
+    }
+    
+    strncpy(info->resolution, "Unknown", sizeof(info->resolution) - 1);
+    info->resolution[sizeof(info->resolution) - 1] = '\0';
+}
+
+void get_desktop_environment(system_info_t *info) {
+    char *de = NULL;
+    char de_with_display[128] = {0};
+    char version_info[64] = {0};
+    
+    // Check environment variables
+    if ((de = getenv("XDG_CURRENT_DESKTOP"))) {
+        strncpy(de_with_display, de, sizeof(de_with_display) - 1);
+    } else if ((de = getenv("DESKTOP_SESSION"))) {
+        strncpy(de_with_display, de, sizeof(de_with_display) - 1);
+    } else if ((de = getenv("XDG_SESSION_DESKTOP"))) {
+        strncpy(de_with_display, de, sizeof(de_with_display) - 1);
+    } else if (getenv("KDE_FULL_SESSION")) {
+        strncpy(de_with_display, "KDE", sizeof(de_with_display) - 1);
+    } else if (getenv("GNOME_DESKTOP_SESSION_ID")) {
+        strncpy(de_with_display, "GNOME", sizeof(de_with_display) - 1);
+    } else {
+        strncpy(de_with_display, "Unknown", sizeof(de_with_display) - 1);
+    }
+    
+    // Get version information for specific DEs
+    if (strstr(de_with_display, "KDE") || strstr(de_with_display, "plasma")) {
+        char *plasma_version = execute_command("plasmashell --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+'");
+        if (plasma_version && strlen(plasma_version) > 0) {
+            snprintf(version_info, sizeof(version_info), "Plasma %.20s", plasma_version);
+        } else {
+            strncpy(version_info, "KDE", sizeof(version_info) - 1);
+        }
+    } else if (strstr(de_with_display, "GNOME")) {
+        char *gnome_version = execute_command("gnome-shell --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+'");
+        if (gnome_version && strlen(gnome_version) > 0) {
+            snprintf(version_info, sizeof(version_info), "GNOME %.20s", gnome_version);
+        } else {
+            strncpy(version_info, "GNOME", sizeof(version_info) - 1);
+        }
+    } else if (strstr(de_with_display, "XFCE")) {
+        char *xfce_version = execute_command("xfce4-session --version 2>/dev/null | head -1 | grep -o '[0-9]\\+\\.[0-9]\\+'");
+        if (xfce_version && strlen(xfce_version) > 0) {
+            snprintf(version_info, sizeof(version_info), "Xfce %.20s", xfce_version);
+        } else {
+            strncpy(version_info, de_with_display, sizeof(version_info) - 1);
+        }
+    } else if (strstr(de_with_display, "MATE")) {
+        char *mate_version = execute_command("mate-session --version 2>/dev/null | head -1 | grep -o '[0-9]\\+\\.[0-9]\\+'");
+        if (mate_version && strlen(mate_version) > 0) {
+            snprintf(version_info, sizeof(version_info), "MATE %.20s", mate_version);
+        } else {
+            strncpy(version_info, de_with_display, sizeof(version_info) - 1);
+        }
+    } else if (strstr(de_with_display, "Cinnamon")) {
+        char *cinnamon_version = execute_command("cinnamon --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+'");
+        if (cinnamon_version && strlen(cinnamon_version) > 0) {
+            snprintf(version_info, sizeof(version_info), "Cinnamon %.15s", cinnamon_version);
+        } else {
+            strncpy(version_info, de_with_display, sizeof(version_info) - 1);
+        }
+    } else {
+        strncpy(version_info, de_with_display, sizeof(version_info) - 1);
+    }
+    
+    // Detect display server (X11/Wayland)
+    if (getenv("WAYLAND_DISPLAY")) {
+        if (strlen(version_info) > 0 && strcmp(version_info, "Unknown") != 0) {
+            snprintf(info->de, sizeof(info->de), "%.50s (Wayland)", version_info);
+        } else {
+            strncpy(info->de, "Wayland", sizeof(info->de) - 1);
+        }
+    } else if (getenv("DISPLAY")) {
+        if (strlen(version_info) > 0 && strcmp(version_info, "Unknown") != 0) {
+            snprintf(info->de, sizeof(info->de), "%.50s (X11)", version_info);
+        } else {
+            strncpy(info->de, "X11", sizeof(info->de) - 1);
+        }
+    } else {
+        strncpy(info->de, version_info, sizeof(info->de) - 1);
+    }
+    
+    info->de[sizeof(info->de) - 1] = '\0';
+}
+
+void get_display_manager(system_info_t *info) {
+    char *dm_result = NULL;
+    
+    // Method 1: Check systemd for active display manager
+    dm_result = execute_command("systemctl list-units --type=service --state=active | grep -E '(gdm|sddm|lightdm|xdm|kdm|mdm|lxdm|slim)' | head -1 | awk '{print $1}' | sed 's/\\.service$//'");
+    if (dm_result && strlen(dm_result) > 0) {
+        // Capitalize and format the DM name
+        if (strstr(dm_result, "gdm")) {
+            strncpy(info->dm, "GDM", sizeof(info->dm) - 1);
+        } else if (strstr(dm_result, "sddm")) {
+            strncpy(info->dm, "SDDM", sizeof(info->dm) - 1);
+        } else if (strstr(dm_result, "lightdm")) {
+            strncpy(info->dm, "LightDM", sizeof(info->dm) - 1);
+        } else if (strstr(dm_result, "xdm")) {
+            strncpy(info->dm, "XDM", sizeof(info->dm) - 1);
+        } else if (strstr(dm_result, "kdm")) {
+            strncpy(info->dm, "KDM", sizeof(info->dm) - 1);
+        } else if (strstr(dm_result, "mdm")) {
+            strncpy(info->dm, "MDM", sizeof(info->dm) - 1);
+        } else if (strstr(dm_result, "lxdm")) {
+            strncpy(info->dm, "LXDM", sizeof(info->dm) - 1);
+        } else if (strstr(dm_result, "slim")) {
+            strncpy(info->dm, "SLiM", sizeof(info->dm) - 1);
+        } else {
+            strncpy(info->dm, dm_result, sizeof(info->dm) - 1);
+        }
+        info->dm[sizeof(info->dm) - 1] = '\0';
+        return;
+    }
+    
+    // Method 2: Check running processes
+    dm_result = execute_command("ps -eo comm | grep -E '^(gdm|gdm3|sddm|lightdm|xdm|kdm|mdm|lxdm|slim)$' | head -1");
+    if (dm_result && strlen(dm_result) > 0) {
+        if (strstr(dm_result, "gdm")) {
+            strncpy(info->dm, "GDM", sizeof(info->dm) - 1);
+        } else if (strstr(dm_result, "sddm")) {
+            strncpy(info->dm, "SDDM", sizeof(info->dm) - 1);
+        } else if (strstr(dm_result, "lightdm")) {
+            strncpy(info->dm, "LightDM", sizeof(info->dm) - 1);
+        } else {
+            strncpy(info->dm, dm_result, sizeof(info->dm) - 1);
+        }
+        info->dm[sizeof(info->dm) - 1] = '\0';
+        return;
+    }
+    
+    // Method 3: Check for display manager configuration files
+    if (access("/etc/gdm/gdm.conf", F_OK) == 0 || access("/etc/gdm3/daemon.conf", F_OK) == 0) {
+        strncpy(info->dm, "GDM", sizeof(info->dm) - 1);
+    } else if (access("/etc/sddm.conf", F_OK) == 0 || access("/etc/sddm/sddm.conf", F_OK) == 0) {
+        strncpy(info->dm, "SDDM", sizeof(info->dm) - 1);
+    } else if (access("/etc/lightdm/lightdm.conf", F_OK) == 0) {
+        strncpy(info->dm, "LightDM", sizeof(info->dm) - 1);
+    } else {
+        strncpy(info->dm, "Unknown", sizeof(info->dm) - 1);
+    }
+    
+    info->dm[sizeof(info->dm) - 1] = '\0';
+}
+
+void get_window_manager(system_info_t *info) {
+    char *result;
+    
+    // Try to get WM from various methods
+    result = execute_command("wmctrl -m 2>/dev/null | grep 'Name:' | cut -d' ' -f2-");
+    if (result && strlen(result) > 0) {
+        strncpy(info->wm, result, sizeof(info->wm) - 1);
+        info->wm[sizeof(info->wm) - 1] = '\0';
+        return;
+    }
+    
+    // Check for common WMs
+    if (getenv("SWAYSOCK")) {
+        strncpy(info->wm, "sway", sizeof(info->wm) - 1);
+    } else if (execute_command("pgrep -x i3 >/dev/null 2>&1; echo $?") && atoi(execute_command("pgrep -x i3 >/dev/null 2>&1; echo $?")) == 0) {
+        strncpy(info->wm, "i3", sizeof(info->wm) - 1);
+    } else if (execute_command("pgrep -x bspwm >/dev/null 2>&1; echo $?") && atoi(execute_command("pgrep -x bspwm >/dev/null 2>&1; echo $?")) == 0) {
+        strncpy(info->wm, "bspwm", sizeof(info->wm) - 1);
+    } else {
+        strncpy(info->wm, "Unknown", sizeof(info->wm) - 1);
+    }
+    
+    info->wm[sizeof(info->wm) - 1] = '\0';
+}
+
+void get_wm_theme(system_info_t *info) {
+    // This is quite complex and varies by WM/DE
+    strncpy(info->wm_theme, "Unknown", sizeof(info->wm_theme) - 1);
+    info->wm_theme[sizeof(info->wm_theme) - 1] = '\0';
+}
+
+void get_theme(system_info_t *info) {
+    char *result;
+    
+    // Try gsettings for GTK theme
+    result = execute_command("gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d \"'\"");
+    if (result && strlen(result) > 0 && strcmp(result, "''") != 0) {
+        strncpy(info->theme, result, sizeof(info->theme) - 1);
+        info->theme[sizeof(info->theme) - 1] = '\0';
+        return;
+    }
+    
+    strncpy(info->theme, "Unknown", sizeof(info->theme) - 1);
+    info->theme[sizeof(info->theme) - 1] = '\0';
+}
+
+void get_icons(system_info_t *info) {
+    char *result;
+    
+    // Try gsettings for icon theme
+    result = execute_command("gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null | tr -d \"'\"");
+    if (result && strlen(result) > 0 && strcmp(result, "''") != 0) {
+        strncpy(info->icons, result, sizeof(info->icons) - 1);
+        info->icons[sizeof(info->icons) - 1] = '\0';
+        return;
+    }
+    
+    strncpy(info->icons, "Unknown", sizeof(info->icons) - 1);
+    info->icons[sizeof(info->icons) - 1] = '\0';
+}
+
+void get_terminal(system_info_t *info) {
+    char *term = getenv("TERM");
+    char *term_program = getenv("TERM_PROGRAM");
+    char *colorterm = getenv("COLORTERM");
+    
+    // Try to get more specific terminal information
+    if (term_program) {
+        strncpy(info->terminal, term_program, sizeof(info->terminal) - 1);
+    } else if (colorterm) {
+        strncpy(info->terminal, colorterm, sizeof(info->terminal) - 1);
+    } else if (term) {
+        // Remove common suffixes to get cleaner names
+        if (strstr(term, "xterm-256color")) {
+            strncpy(info->terminal, "xterm", sizeof(info->terminal) - 1);
+        } else if (strstr(term, "screen")) {
+            strncpy(info->terminal, "screen", sizeof(info->terminal) - 1);
+        } else {
+            strncpy(info->terminal, term, sizeof(info->terminal) - 1);
+        }
+    } else {
+        strncpy(info->terminal, "Unknown", sizeof(info->terminal) - 1);
+    }
+    
+    info->terminal[sizeof(info->terminal) - 1] = '\0';
+}
+
+void get_terminal_font(system_info_t *info) {
+    // This varies greatly by terminal emulator
+    strncpy(info->term_font, "Unknown", sizeof(info->term_font) - 1);
+    info->term_font[sizeof(info->term_font) - 1] = '\0';
+}
+
+void get_cpu(system_info_t *info) {
+    FILE *file = fopen("/proc/cpuinfo", "r");
+    if (!file) {
+        strncpy(info->cpu, "Unknown", sizeof(info->cpu) - 1);
+        info->cpu[sizeof(info->cpu) - 1] = '\0';
+        return;
+    }
+    
+    char line[256];
+    while (fgets(line, sizeof(line), file)) {
+        if (strncmp(line, "model name", 10) == 0) {
+            char *colon = strchr(line, ':');
+            if (colon) {
+                char *cpu_name = trim_whitespace(colon + 1);
+                strncpy(info->cpu, cpu_name, sizeof(info->cpu) - 1);
+                info->cpu[sizeof(info->cpu) - 1] = '\0';
+                fclose(file);
+                return;
+            }
+        }
+    }
+    
+    fclose(file);
+    strncpy(info->cpu, "Unknown", sizeof(info->cpu) - 1);
+    info->cpu[sizeof(info->cpu) - 1] = '\0';
+}
+
+void get_gpu(system_info_t *info) {
+    char *result;
+    
+    // Try lspci
+    result = execute_command("lspci | grep -i vga | head -1 | cut -d: -f3");
+    if (result && strlen(result) > 0) {
+        strncpy(info->gpu, trim_whitespace(result), sizeof(info->gpu) - 1);
+        info->gpu[sizeof(info->gpu) - 1] = '\0';
+        return;
+    }
+    
+    // Try nvidia-smi
+    result = execute_command("nvidia-smi --query-gpu=name --format=csv,noheader,nounits 2>/dev/null | head -1");
+    if (result && strlen(result) > 0) {
+        strncpy(info->gpu, result, sizeof(info->gpu) - 1);
+        info->gpu[sizeof(info->gpu) - 1] = '\0';
+        return;
+    }
+    
+    strncpy(info->gpu, "Unknown", sizeof(info->gpu) - 1);
+    info->gpu[sizeof(info->gpu) - 1] = '\0';
+}
+
+void get_memory(system_info_t *info) {
+    struct sysinfo s_info;
+    if (sysinfo(&s_info) == 0) {
+        unsigned long total_mem = s_info.totalram * s_info.mem_unit;
+        unsigned long free_mem = s_info.freeram * s_info.mem_unit;
+        unsigned long used_mem = total_mem - free_mem;
+        
+        char used_str[32], total_str[32];
+        format_memory(used_mem, used_str, sizeof(used_str));
+        format_memory(total_mem, total_str, sizeof(total_str));
+        
+        // Calculate percentage
+        int percentage = (int)((double)used_mem / (double)total_mem * 100.0);
+        
+        // Create visual progress bar
+        const int bar_length = 10;  // Shorter bar to ensure it fits
+        int filled_blocks = (percentage * bar_length) / 100;
+        char progress_bar[64];  // Buffer for the progress bar
+        
+        // Build the progress bar with color coding using ASCII characters
+        strcpy(progress_bar, "\033[36m["); // Cyan opening bracket
+        
+        for (int i = 0; i < bar_length; i++) {
+            if (i < filled_blocks) {
+                if (percentage < 60) {
+                    strcat(progress_bar, "\033[32m#"); // Green for low usage
+                } else if (percentage < 80) {
+                    strcat(progress_bar, "\033[33m#"); // Yellow for medium usage  
+                } else {
+                    strcat(progress_bar, "\033[31m#"); // Red for high usage
+                }
+            } else {
+                strcat(progress_bar, "\033[90m-"); // Dark gray for empty
+            }
+        }
+        
+        strcat(progress_bar, "\033[36m]\033[0m"); // Cyan closing bracket + reset
+        
+        snprintf(info->memory, sizeof(info->memory), "%.28s / %.28s", used_str, total_str);
+        snprintf(info->memory_bar, sizeof(info->memory_bar), "%s %d%%", progress_bar, percentage);
+    } else {
+        strncpy(info->memory, "Unknown", sizeof(info->memory) - 1);
+        strncpy(info->memory_bar, "Unknown", sizeof(info->memory_bar) - 1);
+    }
+    info->memory[sizeof(info->memory) - 1] = '\0';
+    info->memory_bar[sizeof(info->memory_bar) - 1] = '\0';
+}
+
+void get_model(system_info_t *info) {
+    char *result;
+    
+    // Try DMI information
+    result = read_file_content("/sys/devices/virtual/dmi/id/product_name");
+    if (result && strlen(result) > 0 && strcmp(result, "To Be Filled By O.E.M.") != 0) {
+        char *vendor = read_file_content("/sys/devices/virtual/dmi/id/sys_vendor");
+        if (vendor && strlen(vendor) > 0) {
+            snprintf(info->model, sizeof(info->model), "%s %s", vendor, result);
+        } else {
+            strncpy(info->model, result, sizeof(info->model) - 1);
+        }
+        info->model[sizeof(info->model) - 1] = '\0';
+        return;
+    }
+    
+    strncpy(info->model, "Unknown", sizeof(info->model) - 1);
+    info->model[sizeof(info->model) - 1] = '\0';
+}
