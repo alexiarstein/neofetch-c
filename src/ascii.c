@@ -426,8 +426,9 @@ static void process_color_placeholder(const char **src, char **dst, const ascii_
 static void process_line_colors(const char *line, char *processed_line, const ascii_art_t *art) {
     const char *src = line;
     char *dst = processed_line;
-    
-    while (*src && (dst - processed_line) < MAX_ASCII_WIDTH - 20) {
+
+    // Allow expansion for ANSI color codes; keep one byte for final NUL
+    while (*src && (dst - processed_line) < (MAX_ASCII_WIDTH - 1)) {
         if (strncmp(src, "${c", 3) == 0) {
             process_color_placeholder(&src, &dst, art);
         } else {

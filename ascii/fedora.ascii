@@ -1,20 +1,19 @@
-# colors: 12 7
-${c1}             .',;::::;,'.
-         .';:cccccccccccc:;,.
-      .;cccccccccccccccccccccc;.
-    .:cccccccccccccccccccccccccc:.
-  .;ccccccccccccc;${c2}.:dddl:.${c1};ccccccc;.
- .:ccccccccccccc;${c2}OWMKOOXMWd${c1};ccccccc:.
-.:ccccccccccccc;${c2}KMMc${c1};cc;${c2}xMMc${c1};ccccccc:.
-,cccccccccccccc;${c2}MMM.${c1};cc;${c2};WW:${c1};cccccccc,
-:cccccccccccccc;${c2}MMM.${c1};cccccccccccccccc:
-:ccccccc;${c2}oxOOOo${c1};${c2}MMM0OOk.${c1};cccccccccccc:
-cccccc;${c2}0MMKxdd:${c1};${c2}MMMkddc.${c1};cccccccccccc;
-ccccc;${c2}XM0'${c1};cccc;${c2}MMM.${c1};cccccccccccccccc'
-ccccc;${c2}MMo${c1};ccccc;${c2}MMW.${c1};ccccccccccccccc;
-ccccc;${c2}0MNc.${c1}ccc${c2}.xMMd${c1};ccccccccccccccc;
-cccccc;${c2}dNMWXXXWM0:${c1};cccccccccccccc:,
-cccccccc;${c2}.:odl:.${c1};cccccccccccccc:,.
-:cccccccccccccccccccccccccccc:'.
-.:cccccccccccccccccccccc:;,..
-  '::cccccccccccccc::;,.
+${c4}             .',;::::;,'.
+${c4}         .';:cccccccccccc:;,.
+${c4}      .;cccccccccccccccccccccc;.
+${c4}    .:cccccccccccccccccccccccccc:.
+${c4}  .;ccccccccccccc;${c7}.:dddl:.${c4};ccccccc;.
+${c4} .:ccccccccccccc;${c7}OWMKOOXMWd${c4};ccccccc:.
+${c4}.:ccccccccccccc;${c7}KMMc${c4};cc;${c7}xMMc${c4};ccccc:c..
+${c4}cccccccccccccc;${c7}MMM.${c4};cc;${c7};WW:${c4};ccccccccc,
+${c4}:cccccccccccccc;${c7}MMM.${c4};cccccccccccccccc:
+${c4}:ccccccc;${c7}oxOOOo${c4};${c7}MMM0OOk.${c4};cccccccccccc:
+${c4}cccccc;${c7}0MMKxdd:${c4};${c7}MMMkddc.${c4};cccccccccccc;
+${c4}ccccc;${c7}XM0'${c4};cccc;${c7}MMM.${c4};cccccccccccccccc'
+${c4}ccccc;${c7}MMo${c4};ccccc;${c7}MMW.${c4};vcccccccccccccc;
+${c4}ccccc;${c7}0MNc.${c4}ccc${c7}.xMMd${c4};ccccccccccccccc;
+${c4}cccccc;${c7}dNMWXXXWM0:${c4};cccccccccccccc:,
+${c4}cccccccc;${c7}.:odl:.${c4};cccccccccccccc:,.
+${c4}:cccccccccccccccccccccccccccc:'.
+${c4}.:cccccccccccccccccccccc:;,..
+${c4}  '::cccccccccccccc::;,.

@@ -35,7 +35,7 @@
 #define MAX_PATH_LENGTH 512
 #define MAX_DISTRO_NAME 64
 #define MAX_ASCII_LINES 50
-#define MAX_ASCII_WIDTH 80
+#define MAX_ASCII_WIDTH 256
 
 /* System information structure */
 typedef struct {
