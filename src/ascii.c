@@ -273,10 +273,8 @@ static void normalize_string(const char *input, char *output, size_t size) {
     while (input[i] && j < size - 1) {
         if (isalnum(input[i])) {
             output[j++] = tolower(input[i]);
-        } else if (input[i] == ' ' || input[i] == '_' || input[i] == '-') {
-            if (j > 0 && output[j-1] != ' ') {
-                output[j++] = ' ';
-            }
+        } else if ((input[i] == ' ' || input[i] == '_' || input[i] == '-') && j > 0 && output[j-1] != ' ') {
+            output[j++] = ' ';
         }
         i++;
     }
@@ -380,7 +378,7 @@ int calculate_display_width(const char *str) {
 }
 
 // Helper function to process color placeholders in ASCII art
-static void process_color_placeholder(char **src, char **dst, const ascii_art_t *art) {
+static void process_color_placeholder(const char **src, char **dst, const ascii_art_t *art) {
     *src += 3; // Skip "${c"
     
     if (**src < '0' || **src > '7') {
@@ -413,7 +411,7 @@ static void process_color_placeholder(char **src, char **dst, const ascii_art_t 
 
 // Helper function to process line with color codes
 static void process_line_colors(const char *line, char *processed_line, const ascii_art_t *art) {
-    char *src = (char *)line;
+    const char *src = line;
     char *dst = processed_line;
     
     while (*src && (dst - processed_line) < MAX_ASCII_WIDTH - 20) {
