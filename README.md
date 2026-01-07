@@ -39,7 +39,7 @@ The application automatically detects and counts packages from various package m
 ```
 neofetch-c/
 ├── src/
-│   ├── main.c         # Main application entry point
+│   ├── neofetch.c         # Main application entry point
 │   ├── sysinfo.c      # System information gathering functions
 │   ├── ascii.c        # ASCII art loading and display
 │   └── utils.c        # Utility functions
