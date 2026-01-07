@@ -27,7 +27,7 @@ This C version implements the core functionality of neofetch, including:
 
 The application automatically detects and counts packages from various package managers:
 
-- **dpkg** (Debian, Ubuntu)
+- **dpkg** (Debian, GoldenDog, Ubuntu)
 - **rpm** (Red Hat, Fedora, SUSE)
 - **pacman** (Arch Linux)
 - **emerge** (Gentoo)
@@ -70,8 +70,11 @@ make debug
 # Clean build artifacts
 make clean
 
-# Install to /usr/local/bin
-make install
+# Full Install (copies neofetch bin to /usr/bin and neofetch ascii art to /usr/share/neofetch)
+sudo make install
+
+# Full removal (removes binary and ascii art from the system)
+sudo make uninstall
 ```
 
 ## Usage
