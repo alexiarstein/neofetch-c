@@ -120,7 +120,16 @@ static size_t append_fmt(char *buf, size_t buf_size, size_t pos, const char *fmt
 }
 
 static bool extract_os_release_value(char *line, const char *key, char *out, size_t out_size) {
-    size_t key_len = strlen(key);
+    if (!line || !key || !out || out_size == 0) {
+        return false;
+    }
+
+    const size_t key_max = 64;
+    size_t key_len = strnlen(key, key_max);
+    if (key_len == 0 || key_len >= key_max) {
+        return false;
+    }
+
     if (strncmp(line, key, key_len) != 0) return false;
 
     char *eq = strchr(line, '=');
