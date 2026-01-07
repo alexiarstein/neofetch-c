@@ -387,53 +387,35 @@ static void get_de_version_info(const char *version_cmd, const char *fallback,
     }
 }
 
+// Helper to process DE version with consistent formatting
+static void format_de_version(const char *version_cmd, const char *fallback,
+                               char *version_info, size_t size, const char *display_prefix, size_t prefix_len) {
+    char temp[64];
+    get_de_version_info(version_cmd, fallback, temp, sizeof(temp));
+    if (strstr(temp, ".")) {
+        snprintf(version_info, size, "%.*s %.20s", (int)prefix_len, display_prefix, temp);
+    } else {
+        safe_strcpy(version_info, temp, size - 1);
+    }
+}
+
 // Helper function to get version information for specific DEs
 static void get_de_version(const char *de_with_display, char *version_info, size_t size) {
     if (strstr(de_with_display, "KDE") || strstr(de_with_display, "plasma")) {
-        char temp[64];
-        get_de_version_info("plasmashell --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+'",
-                           "KDE", temp, sizeof(temp));
-        if (strstr(temp, ".")) {
-            snprintf(version_info, size, "Plasma %.20s", temp);
-        } else {
-            safe_strcpy(version_info, temp, size - 1);
-        }
+        format_de_version("plasmashell --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+'",
+                         "KDE", version_info, size, "Plasma", 6);
     } else if (strstr(de_with_display, "GNOME")) {
-        char temp[64];
-        get_de_version_info("gnome-shell --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+'",
-                           "GNOME", temp, sizeof(temp));
-        if (strstr(temp, ".")) {
-            snprintf(version_info, size, "GNOME %.20s", temp);
-        } else {
-            safe_strcpy(version_info, temp, size - 1);
-        }
+        format_de_version("gnome-shell --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+'",
+                         "GNOME", version_info, size, "GNOME", 5);
     } else if (strstr(de_with_display, "XFCE")) {
-        char temp[64];
-        get_de_version_info("xfce4-session --version 2>/dev/null | head -1 | grep -o '[0-9]\\+\\.[0-9]\\+'",
-                           de_with_display, temp, sizeof(temp));
-        if (strstr(temp, ".")) {
-            snprintf(version_info, size, "Xfce %.20s", temp);
-        } else {
-            safe_strcpy(version_info, temp, size - 1);
-        }
+        format_de_version("xfce4-session --version 2>/dev/null | head -1 | grep -o '[0-9]\\+\\.[0-9]\\+'",
+                         de_with_display, version_info, size, "Xfce", 4);
     } else if (strstr(de_with_display, "MATE")) {
-        char temp[64];
-        get_de_version_info("mate-session --version 2>/dev/null | head -1 | grep -o '[0-9]\\+\\.[0-9]\\+'",
-                           de_with_display, temp, sizeof(temp));
-        if (strstr(temp, ".")) {
-            snprintf(version_info, size, "MATE %.20s", temp);
-        } else {
-            safe_strcpy(version_info, temp, size - 1);
-        }
+        format_de_version("mate-session --version 2>/dev/null | head -1 | grep -o '[0-9]\\+\\.[0-9]\\+'",
+                         de_with_display, version_info, size, "MATE", 4);
     } else if (strstr(de_with_display, "Cinnamon")) {
-        char temp[64];
-        get_de_version_info("cinnamon --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+'",
-                           de_with_display, temp, sizeof(temp));
-        if (strstr(temp, ".")) {
-            snprintf(version_info, size, "Cinnamon %.15s", temp);
-        } else {
-            safe_strcpy(version_info, temp, size - 1);
-        }
+        format_de_version("cinnamon --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+'",
+                         de_with_display, version_info, size, "Cinnamon", 8);
     } else {
         safe_strcpy(version_info, de_with_display, size - 1);
         version_info[size - 1] = '\0';
@@ -469,32 +451,26 @@ void get_desktop_environment(system_info_t *info) {
     format_de_with_server(info, version_info);
 }
 
+// Helper function to map display manager to canonical name
+static const char* get_dm_name(const char *dm_str) {
+    if (strstr(dm_str, "gdm")) return "GDM";
+    if (strstr(dm_str, "sddm")) return "SDDM";
+    if (strstr(dm_str, "lightdm")) return "LightDM";
+    if (strstr(dm_str, "xdm")) return "XDM";
+    if (strstr(dm_str, "kdm")) return "KDM";
+    if (strstr(dm_str, "mdm")) return "MDM";
+    if (strstr(dm_str, "lxdm")) return "LXDM";
+    if (strstr(dm_str, "slim")) return "SLiM";
+    return dm_str;
+}
+
 void get_display_manager(system_info_t *info) {
     char *dm_result = NULL;
     
     // Method 1: Check systemd for active display manager
     dm_result = execute_command("systemctl list-units --type=service --state=active | grep -E '(gdm|sddm|lightdm|xdm|kdm|mdm|lxdm|slim)' | head -1 | awk '{print $1}' | sed 's/\\.service$//'");
     if (dm_result && strnlen(dm_result, sizeof(info->dm)) > 0) {
-        // Capitalize and format the DM name
-        if (strstr(dm_result, "gdm")) {
-            safe_strcpy(info->dm, "GDM", sizeof(info->dm));
-        } else if (strstr(dm_result, "sddm")) {
-            safe_strcpy(info->dm, "SDDM", sizeof(info->dm));
-        } else if (strstr(dm_result, "lightdm")) {
-            safe_strcpy(info->dm, "LightDM", sizeof(info->dm));
-        } else if (strstr(dm_result, "xdm")) {
-            safe_strcpy(info->dm, "XDM", sizeof(info->dm));
-        } else if (strstr(dm_result, "kdm")) {
-            safe_strcpy(info->dm, "KDM", sizeof(info->dm));
-        } else if (strstr(dm_result, "mdm")) {
-            safe_strcpy(info->dm, "MDM", sizeof(info->dm));
-        } else if (strstr(dm_result, "lxdm")) {
-            safe_strcpy(info->dm, "LXDM", sizeof(info->dm));
-        } else if (strstr(dm_result, "slim")) {
-            safe_strcpy(info->dm, "SLiM", sizeof(info->dm));
-        } else {
-            safe_strcpy(info->dm, dm_result, sizeof(info->dm));
-        }
+        safe_strcpy(info->dm, get_dm_name(dm_result), sizeof(info->dm));
         info->dm[sizeof(info->dm) - 1] = '\0';
         return;
     }
@@ -502,15 +478,7 @@ void get_display_manager(system_info_t *info) {
     // Method 2: Check running processes
     dm_result = execute_command("ps -eo comm | grep -E '^(gdm|gdm3|sddm|lightdm|xdm|kdm|mdm|lxdm|slim)$' | head -1");
     if (dm_result && strnlen(dm_result, sizeof(info->dm)) > 0) {
-        if (strstr(dm_result, "gdm")) {
-            safe_strcpy(info->dm, "GDM", sizeof(info->dm));
-        } else if (strstr(dm_result, "sddm")) {
-            safe_strcpy(info->dm, "SDDM", sizeof(info->dm));
-        } else if (strstr(dm_result, "lightdm")) {
-            safe_strcpy(info->dm, "LightDM", sizeof(info->dm));
-        } else {
-            safe_strcpy(info->dm, dm_result, sizeof(info->dm));
-        }
+        safe_strcpy(info->dm, get_dm_name(dm_result), sizeof(info->dm));
         info->dm[sizeof(info->dm) - 1] = '\0';
         return;
     }
