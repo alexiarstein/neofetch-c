@@ -404,8 +404,9 @@ static void process_color_placeholder(const char **src, char **dst, const ascii_
     
     // Add color code
     if (color_num <= 7) {
-        strcpy(*dst, art->colors[color_num]);
-        *dst += strlen(art->colors[color_num]);
+        size_t color_len = strnlen(art->colors[color_num], sizeof(art->colors[color_num]));
+        memcpy(*dst, art->colors[color_num], color_len);
+        *dst += color_len;
     }
 }
 
@@ -460,7 +461,7 @@ static int should_skip_line(const char *line, int line_count) {
     }
     
     // Skip empty lines at the beginning
-    if (line_count == 0 && strlen(line) == 0) {
+    if (line_count == 0 && strnlen(line, MAX_ASCII_WIDTH) == 0) {
         return 1;
     }
     
@@ -514,7 +515,7 @@ int load_ascii_art(const char *distro_name, ascii_art_t *art) {
         char processed_line[MAX_ASCII_WIDTH];
         process_line_colors(line, processed_line, art);
         
-        strcpy(art->lines[art->line_count], processed_line);
+        snprintf(art->lines[art->line_count], sizeof(art->lines[art->line_count]), "%s", processed_line);
         
         // Calculate display width excluding ANSI escape sequences
         int actual_len = calculate_display_width(processed_line);
@@ -537,7 +538,7 @@ typedef struct {
 
 // Helper function to check if info line should be displayed
 static int should_display_info(const char *content) {
-    return strlen(content) > 0 && strcmp(content, "Unknown") != 0;
+    return strnlen(content, 512) > 0 && strcmp(content, "Unknown") != 0;
 }
 
 // Helper function to build display entries
@@ -595,7 +596,7 @@ static void print_info_line(const system_info_t *info, const info_entry_t *entri
     if (line_idx == 0) {
         printf("\033[1m%s@%s\033[0m", info->user, info->hostname);
     } else if (line_idx == 1) {
-        int title_len = strlen(info->user) + strlen(info->hostname) + 1;
+        int title_len = strnlen(info->user, sizeof(info->user)) + strnlen(info->hostname, sizeof(info->hostname)) + 1;
         for (int j = 0; j < title_len; j++) {
             printf("-");
         }

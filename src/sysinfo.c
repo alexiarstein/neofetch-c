@@ -78,7 +78,7 @@ void get_distro(system_info_t *info) {
     
     // Fallback: try lsb_release
     const char *result = execute_command("lsb_release -d 2>/dev/null | cut -f2");
-    if (result && strlen(result) > 0) {
+    if (result && strnlen(result, sizeof(info->distro)) > 0) {
         strncpy(info->distro, result, sizeof(info->distro) - 1);
         info->distro[sizeof(info->distro) - 1] = '\0';
         return;
@@ -91,7 +91,7 @@ void get_distro(system_info_t *info) {
 
 void get_architecture(system_info_t *info) {
     char *output = execute_command("uname -m");
-    if (output && strlen(output) > 0) {
+    if (output && strnlen(output, sizeof(info->architecture)) > 0) {
         // Remove newline and copy architecture
         output[strcspn(output, "\n")] = '\0';
         
@@ -116,7 +116,7 @@ void get_architecture(system_info_t *info) {
 
 // Helper function to check if string is valid (not empty, not placeholder)
 static int is_valid_hardware_string(const char *str) {
-    return str && strlen(str) > 0 && strcmp(str, "To be filled by O.E.M.") != 0;
+    return str && strnlen(str, 256) > 0 && strcmp(str, "To be filled by O.E.M.") != 0;
 }
 
 // Helper function to safely copy hardware info
@@ -158,7 +158,7 @@ static void get_hardware_from_hostnamectl(char *vendor, size_t vendor_size, char
     }
     
     char *hostnamectl_output = execute_command("hostnamectl 2>/dev/null | grep -E 'Hardware (Vendor|Model)' | head -2");
-    if (!hostnamectl_output || strlen(hostnamectl_output) == 0) {
+    if (!hostnamectl_output || strnlen(hostnamectl_output, 512) == 0) {
         return;
     }
     
@@ -223,7 +223,8 @@ static int count_packages(const char *command) {
 static void add_package_breakdown(char *breakdown, size_t breakdown_size, 
                                    int *breakdown_count, const char *pm_name, int count) {
     if (count > 0) {
-        snprintf(breakdown + strlen(breakdown), breakdown_size - strlen(breakdown), 
+        size_t current_len = strnlen(breakdown, breakdown_size);
+        snprintf(breakdown + current_len, breakdown_size - current_len, 
                  "%s\033[36m%s\033[0m: %d", *breakdown_count > 0 ? " - " : "", pm_name, count);
         (*breakdown_count)++;
     }
@@ -309,7 +310,7 @@ void get_shell(system_info_t *info) {
                 return;
             }
             
-            if (version_result && strlen(version_result) > 0) {
+            if (version_result && strnlen(version_result, sizeof(info->shell)) > 0) {
                 snprintf(info->shell, sizeof(info->shell), "%s %s", shell_name, version_result);
             } else {
                 strncpy(info->shell, shell_name, sizeof(info->shell) - 1);
@@ -328,7 +329,7 @@ void get_resolution(system_info_t *info) {
     
     // Try xrandr first (for X11) - get all connected monitor resolutions
     result = execute_command("xrandr --current 2>/dev/null | grep ' connected' | grep -o '[0-9]\\+x[0-9]\\+' | tr '\\n' ', ' | sed 's/,$//' | sed 's/,/, /g'");
-    if (result && strlen(result) > 0) {
+    if (result && strnlen(result, sizeof(info->resolution)) > 0) {
         strncpy(info->resolution, result, sizeof(info->resolution) - 1);
         info->resolution[sizeof(info->resolution) - 1] = '\0';
         return;
@@ -336,7 +337,7 @@ void get_resolution(system_info_t *info) {
     
     // Try wlr-randr (for Wayland)
     result = execute_command("wlr-randr 2>/dev/null | grep -o '[0-9]\\+x[0-9]\\+' | head -1");
-    if (result && strlen(result) > 0) {
+    if (result && strnlen(result, sizeof(info->resolution)) > 0) {
         strncpy(info->resolution, result, sizeof(info->resolution) - 1);
         info->resolution[sizeof(info->resolution) - 1] = '\0';
         return;
@@ -344,7 +345,7 @@ void get_resolution(system_info_t *info) {
     
     // Check /sys/class/drm
     result = execute_command("find /sys/class/drm/*/modes -type f -exec cat {} \\; 2>/dev/null | head -1");
-    if (result && strlen(result) > 0) {
+    if (result && strnlen(result, sizeof(info->resolution)) > 0) {
         strncpy(info->resolution, result, sizeof(info->resolution) - 1);
         info->resolution[sizeof(info->resolution) - 1] = '\0';
         return;
@@ -378,7 +379,7 @@ static void detect_de_name(char *de_with_display, size_t size) {
 static void get_de_version_info(const char *version_cmd, const char *fallback, 
                                  char *version_info, size_t size) {
     char *version = execute_command(version_cmd);
-    if (version && strlen(version) > 0) {
+    if (version && strnlen(version, size) > 0) {
         snprintf(version_info, size, "%s", version);
     } else {
         strncpy(version_info, fallback, size - 1);
@@ -442,13 +443,13 @@ static void get_de_version(const char *de_with_display, char *version_info, size
 // Helper function to format DE with display server
 static void format_de_with_server(system_info_t *info, const char *version_info) {
     if (getenv("WAYLAND_DISPLAY")) {
-        if (strlen(version_info) > 0 && strcmp(version_info, "Unknown") != 0) {
+        if (strnlen(version_info, sizeof(info->de)) > 0 && strcmp(version_info, "Unknown") != 0) {
             snprintf(info->de, sizeof(info->de), "%.50s (Wayland)", version_info);
         } else {
             strncpy(info->de, "Wayland", sizeof(info->de) - 1);
         }
     } else if (getenv("DISPLAY")) {
-        if (strlen(version_info) > 0 && strcmp(version_info, "Unknown") != 0) {
+        if (strnlen(version_info, sizeof(info->de)) > 0 && strcmp(version_info, "Unknown") != 0) {
             snprintf(info->de, sizeof(info->de), "%.50s (X11)", version_info);
         } else {
             strncpy(info->de, "X11", sizeof(info->de) - 1);
@@ -473,7 +474,7 @@ void get_display_manager(system_info_t *info) {
     
     // Method 1: Check systemd for active display manager
     dm_result = execute_command("systemctl list-units --type=service --state=active | grep -E '(gdm|sddm|lightdm|xdm|kdm|mdm|lxdm|slim)' | head -1 | awk '{print $1}' | sed 's/\\.service$//'");
-    if (dm_result && strlen(dm_result) > 0) {
+    if (dm_result && strnlen(dm_result, sizeof(info->dm)) > 0) {
         // Capitalize and format the DM name
         if (strstr(dm_result, "gdm")) {
             strncpy(info->dm, "GDM", sizeof(info->dm) - 1);
@@ -500,7 +501,7 @@ void get_display_manager(system_info_t *info) {
     
     // Method 2: Check running processes
     dm_result = execute_command("ps -eo comm | grep -E '^(gdm|gdm3|sddm|lightdm|xdm|kdm|mdm|lxdm|slim)$' | head -1");
-    if (dm_result && strlen(dm_result) > 0) {
+    if (dm_result && strnlen(dm_result, sizeof(info->dm)) > 0) {
         if (strstr(dm_result, "gdm")) {
             strncpy(info->dm, "GDM", sizeof(info->dm) - 1);
         } else if (strstr(dm_result, "sddm")) {
@@ -533,7 +534,7 @@ void get_window_manager(system_info_t *info) {
     
     // Try to get WM from various methods
     result = execute_command("wmctrl -m 2>/dev/null | grep 'Name:' | cut -d' ' -f2-");
-    if (result && strlen(result) > 0) {
+    if (result && strnlen(result, sizeof(info->wm)) > 0) {
         strncpy(info->wm, result, sizeof(info->wm) - 1);
         info->wm[sizeof(info->wm) - 1] = '\0';
         return;
@@ -564,7 +565,7 @@ void get_theme(system_info_t *info) {
     
     // Try gsettings for GTK theme
     result = execute_command("gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d \"'\"");
-    if (result && strlen(result) > 0 && strcmp(result, "''") != 0) {
+    if (result && strnlen(result, sizeof(info->theme)) > 0 && strcmp(result, "''") != 0) {
         strncpy(info->theme, result, sizeof(info->theme) - 1);
         info->theme[sizeof(info->theme) - 1] = '\0';
         return;
@@ -579,7 +580,7 @@ void get_icons(system_info_t *info) {
     
     // Try gsettings for icon theme
     result = execute_command("gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null | tr -d \"'\"");
-    if (result && strlen(result) > 0 && strcmp(result, "''") != 0) {
+    if (result && strnlen(result, sizeof(info->icons)) > 0 && strcmp(result, "''") != 0) {
         strncpy(info->icons, result, sizeof(info->icons) - 1);
         info->icons[sizeof(info->icons) - 1] = '\0';
         return;
@@ -653,7 +654,7 @@ void get_gpu(system_info_t *info) {
     
     // Try lspci
     result = execute_command("lspci | grep -i vga | head -1 | cut -d: -f3");
-    if (result && strlen(result) > 0) {
+    if (result && strnlen(result, sizeof(info->gpu)) > 0) {
         strncpy(info->gpu, trim_whitespace(result), sizeof(info->gpu) - 1);
         info->gpu[sizeof(info->gpu) - 1] = '\0';
         return;
@@ -661,7 +662,7 @@ void get_gpu(system_info_t *info) {
     
     // Try nvidia-smi
     result = execute_command("nvidia-smi --query-gpu=name --format=csv,noheader,nounits 2>/dev/null | head -1");
-    if (result && strlen(result) > 0) {
+    if (result && strnlen(result, sizeof(info->gpu)) > 0) {
         strncpy(info->gpu, result, sizeof(info->gpu) - 1);
         info->gpu[sizeof(info->gpu) - 1] = '\0';
         return;
@@ -763,9 +764,9 @@ void get_model(system_info_t *info) {
     
     // Try DMI information
     result = read_file_content("/sys/devices/virtual/dmi/id/product_name");
-    if (result && strlen(result) > 0 && strcmp(result, "To Be Filled By O.E.M.") != 0) {
+    if (result && strnlen(result, sizeof(info->model)) > 0 && strcmp(result, "To Be Filled By O.E.M.") != 0) {
         char *vendor = read_file_content("/sys/devices/virtual/dmi/id/sys_vendor");
-        if (vendor && strlen(vendor) > 0) {
+        if (vendor && strnlen(vendor, 256) > 0) {
             snprintf(info->model, sizeof(info->model), "%s %s", vendor, result);
         } else {
             strncpy(info->model, result, sizeof(info->model) - 1);

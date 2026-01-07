@@ -28,7 +28,10 @@ char *trim_whitespace(char *str) {
         return str;
     
     // Trim trailing space
-    end = str + strlen(str) - 1;
+    size_t len = strnlen(str, 1024);
+    if (len == 0) return str;
+    
+    end = str + len - 1;
     while (end > str && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r')) end--;
     
     // Write new null terminator character
@@ -100,7 +103,7 @@ try_lsb_release:
     
     // Method 2: lsb_release
     content = execute_command("lsb_release -si 2>/dev/null");
-    if (content && strlen(content) > 0) {
+    if (content && strnlen(content, size) > 0) {
         strncpy(distro_name, content, size - 1);
         distro_name[size - 1] = '\0';
         return;
