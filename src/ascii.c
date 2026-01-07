@@ -429,28 +429,28 @@ static void process_line_colors(const char *line, char *processed_line, const as
 static void setup_default_ascii(ascii_art_t *art) {
     art->line_count = 6;
     art->max_width = 20;
-    strcpy(art->lines[0], "      /\\      ");
-    strcpy(art->lines[1], "     /  \\     ");
-    strcpy(art->lines[2], "    /____\\    ");
-    strcpy(art->lines[3], "   /      \\   ");
-    strcpy(art->lines[4], "  /        \\  ");
-    strcpy(art->lines[5], " /__________\\ ");
+    snprintf(art->lines[0], sizeof(art->lines[0]), "      /\\      ");
+    snprintf(art->lines[1], sizeof(art->lines[1]), "     /  \\     ");
+    snprintf(art->lines[2], sizeof(art->lines[2]), "    /____\\    ");
+    snprintf(art->lines[3], sizeof(art->lines[3]), "   /      \\   ");
+    snprintf(art->lines[4], sizeof(art->lines[4]), "  /        \\  ");
+    snprintf(art->lines[5], sizeof(art->lines[5]), " /__________\\ ");
     
-    strcpy(art->colors[0], "\033[0m");   // reset
-    strcpy(art->colors[1], "\033[34m");  // blue
-    strcpy(art->colors[2], "\033[36m");  // cyan
+    snprintf(art->colors[0], sizeof(art->colors[0]), "\033[0m");   // reset
+    snprintf(art->colors[1], sizeof(art->colors[1]), "\033[34m");  // blue
+    snprintf(art->colors[2], sizeof(art->colors[2]), "\033[36m");  // cyan
 }
 
 // Helper function to setup color mappings
 static void setup_color_mappings(ascii_art_t *art) {
-    strcpy(art->colors[0], "\033[0m");   // reset
-    strcpy(art->colors[1], "\033[31m");  // red
-    strcpy(art->colors[2], "\033[32m");  // green  
-    strcpy(art->colors[3], "\033[33m");  // yellow
-    strcpy(art->colors[4], "\033[34m");  // blue
-    strcpy(art->colors[5], "\033[35m");  // magenta
-    strcpy(art->colors[6], "\033[36m");  // cyan
-    strcpy(art->colors[7], "\033[37m");  // white
+    snprintf(art->colors[0], sizeof(art->colors[0]), "\033[0m");   // reset
+    snprintf(art->colors[1], sizeof(art->colors[1]), "\033[31m");  // red
+    snprintf(art->colors[2], sizeof(art->colors[2]), "\033[32m");  // green  
+    snprintf(art->colors[3], sizeof(art->colors[3]), "\033[33m");  // yellow
+    snprintf(art->colors[4], sizeof(art->colors[4]), "\033[34m");  // blue
+    snprintf(art->colors[5], sizeof(art->colors[5]), "\033[35m");  // magenta
+    snprintf(art->colors[6], sizeof(art->colors[6]), "\033[36m");  // cyan
+    snprintf(art->colors[7], sizeof(art->colors[7]), "\033[37m");  // white
 }
 
 // Helper function to process ASCII file line
