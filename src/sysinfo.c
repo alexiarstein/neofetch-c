@@ -213,103 +213,65 @@ void get_uptime(system_info_t *info) {
     info->uptime[sizeof(info->uptime) - 1] = '\0';
 }
 
+// Helper function to count packages for a specific package manager
+static int count_packages(const char *command) {
+    char *result = execute_command(command);
+    return (result && atoi(result) > 0) ? atoi(result) : 0;
+}
+
+// Helper function to add package count to breakdown string
+static void add_package_breakdown(char *breakdown, size_t breakdown_size, 
+                                   int *breakdown_count, const char *pm_name, int count) {
+    if (count > 0) {
+        snprintf(breakdown + strlen(breakdown), breakdown_size - strlen(breakdown), 
+                 "%s\033[36m%s\033[0m: %d", *breakdown_count > 0 ? " - " : "", pm_name, count);
+        (*breakdown_count)++;
+    }
+}
+
 void get_packages(system_info_t *info) {
     int total_packages = 0;
-    char *result;
     char breakdown[384] = "";
     int breakdown_count = 0;
     
     // Check various package managers
+    int dpkg_count = count_packages("dpkg -l 2>/dev/null | grep '^ii' | wc -l");
+    int rpm_count = count_packages("rpm -qa 2>/dev/null | wc -l");
+    int pacman_count = count_packages("pacman -Q 2>/dev/null | wc -l");
+    int emerge_count = count_packages("ls -d /var/db/pkg/*/* 2>/dev/null | wc -l");
+    int xbps_count = count_packages("xbps-query -l 2>/dev/null | wc -l");
+    int apk_count = count_packages("apk list --installed 2>/dev/null | wc -l");
+    int flatpak_count = count_packages("flatpak list 2>/dev/null | wc -l");
+    int snap_count = count_packages("snap list 2>/dev/null | tail -n +2 | wc -l");
+    int brew_count = count_packages("brew list --formula 2>/dev/null | wc -l");
     
-    // dpkg (Debian/Ubuntu)
-    result = execute_command("dpkg -l 2>/dev/null | grep '^ii' | wc -l");
-    int dpkg_count = (result && atoi(result) > 0) ? atoi(result) : 0;
-    if (dpkg_count > 0) {
-        total_packages += dpkg_count;
-        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
-                 "%s\033[36m.deb\033[0m: %d", breakdown_count > 0 ? " - " : "", dpkg_count);
-        breakdown_count++;
-    }
+    // Add to breakdown and total
+    total_packages += dpkg_count;
+    add_package_breakdown(breakdown, sizeof(breakdown), &breakdown_count, ".deb", dpkg_count);
     
-    // rpm (Red Hat/Fedora)
-    result = execute_command("rpm -qa 2>/dev/null | wc -l");
-    int rpm_count = (result && atoi(result) > 0) ? atoi(result) : 0;
-    if (rpm_count > 0) {
-        total_packages += rpm_count;
-        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
-                 "%s\033[36m.rpm\033[0m: %d", breakdown_count > 0 ? " - " : "", rpm_count);
-        breakdown_count++;
-    }
+    total_packages += rpm_count;
+    add_package_breakdown(breakdown, sizeof(breakdown), &breakdown_count, ".rpm", rpm_count);
     
-    // pacman (Arch)
-    result = execute_command("pacman -Q 2>/dev/null | wc -l");
-    int pacman_count = (result && atoi(result) > 0) ? atoi(result) : 0;
-    if (pacman_count > 0) {
-        total_packages += pacman_count;
-        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
-                 "%s\033[36mpacman\033[0m: %d", breakdown_count > 0 ? " - " : "", pacman_count);
-        breakdown_count++;
-    }
+    total_packages += pacman_count;
+    add_package_breakdown(breakdown, sizeof(breakdown), &breakdown_count, "pacman", pacman_count);
     
-    // emerge (Gentoo)
-    result = execute_command("ls -d /var/db/pkg/*/* 2>/dev/null | wc -l");
-    int emerge_count = (result && atoi(result) > 0) ? atoi(result) : 0;
-    if (emerge_count > 0) {
-        total_packages += emerge_count;
-        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
-                 "%s\033[36memerge\033[0m: %d", breakdown_count > 0 ? " - " : "", emerge_count);
-        breakdown_count++;
-    }
+    total_packages += emerge_count;
+    add_package_breakdown(breakdown, sizeof(breakdown), &breakdown_count, "emerge", emerge_count);
     
-    // xbps (Void Linux)
-    result = execute_command("xbps-query -l 2>/dev/null | wc -l");
-    int xbps_count = (result && atoi(result) > 0) ? atoi(result) : 0;
-    if (xbps_count > 0) {
-        total_packages += xbps_count;
-        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
-                 "%s\033[36mxbps\033[0m: %d", breakdown_count > 0 ? " - " : "", xbps_count);
-        breakdown_count++;
-    }
+    total_packages += xbps_count;
+    add_package_breakdown(breakdown, sizeof(breakdown), &breakdown_count, "xbps", xbps_count);
     
-    // apk (Alpine)
-    result = execute_command("apk list --installed 2>/dev/null | wc -l");
-    int apk_count = (result && atoi(result) > 0) ? atoi(result) : 0;
-    if (apk_count > 0) {
-        total_packages += apk_count;
-        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
-                 "%s\033[36mapk\033[0m: %d", breakdown_count > 0 ? " - " : "", apk_count);
-        breakdown_count++;
-    }
+    total_packages += apk_count;
+    add_package_breakdown(breakdown, sizeof(breakdown), &breakdown_count, "apk", apk_count);
     
-    // flatpak
-    result = execute_command("flatpak list 2>/dev/null | wc -l");
-    int flatpak_count = (result && atoi(result) > 0) ? atoi(result) : 0;
-    if (flatpak_count > 0) {
-        total_packages += flatpak_count;
-        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
-                 "%s\033[36mflatpak\033[0m: %d", breakdown_count > 0 ? " - " : "", flatpak_count);
-        breakdown_count++;
-    }
+    total_packages += flatpak_count;
+    add_package_breakdown(breakdown, sizeof(breakdown), &breakdown_count, "flatpak", flatpak_count);
     
-    // snap
-    result = execute_command("snap list 2>/dev/null | tail -n +2 | wc -l");
-    int snap_count = (result && atoi(result) > 0) ? atoi(result) : 0;
-    if (snap_count > 0) {
-        total_packages += snap_count;
-        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
-                 "%s\033[36msnap\033[0m: %d", breakdown_count > 0 ? " - " : "", snap_count);
-        breakdown_count++;
-    }
+    total_packages += snap_count;
+    add_package_breakdown(breakdown, sizeof(breakdown), &breakdown_count, "snap", snap_count);
     
-    // brew (Homebrew)
-    result = execute_command("brew list --formula 2>/dev/null | wc -l");
-    int brew_count = (result && atoi(result) > 0) ? atoi(result) : 0;
-    if (brew_count > 0) {
-        total_packages += brew_count;
-        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
-                 "%s\033[36mbrew\033[0m: %d", breakdown_count > 0 ? " - " : "", brew_count);
-        breakdown_count++;
-    }
+    total_packages += brew_count;
+    add_package_breakdown(breakdown, sizeof(breakdown), &breakdown_count, "brew", brew_count);
     
     if (total_packages > 0) {
         if (breakdown_count > 0) {
@@ -675,87 +637,76 @@ void get_gpu(system_info_t *info) {
     info->gpu[sizeof(info->gpu) - 1] = '\0';
 }
 
+// Helper function to build a colored progress bar
+static void build_progress_bar(char *bar, size_t bar_size, int percentage, int bar_length) {
+    int filled_blocks = (percentage * bar_length) / 100;
+    int bar_pos = 0;
+    
+    bar_pos += snprintf(bar + bar_pos, bar_size - bar_pos, "\033[36m[");
+    
+    for (int i = 0; i < bar_length && bar_pos < (int)(bar_size - 1); i++) {
+        const char *color = (i < filled_blocks) ? 
+            (percentage < 60 ? "\033[32m#" : (percentage < 80 ? "\033[33m#" : "\033[31m#")) :
+            "\033[90m-";
+        bar_pos += snprintf(bar + bar_pos, bar_size - bar_pos, "%s", color);
+    }
+    
+    snprintf(bar + bar_pos, bar_size - bar_pos, "\033[36m]\033[0m");
+}
+
+// Helper function to get CPU load string with progress bar
+static void get_cpu_load_string(char *cpu_load_str, size_t str_size, int bar_length) {
+    double loadavg[3];
+    cpu_load_str[0] = '\0';
+    
+    if (getloadavg(loadavg, 1) == -1) {
+        return;
+    }
+    
+    long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    if (num_cores <= 0) {
+        return;
+    }
+    
+    int cpu_percentage = (int)((loadavg[0] / num_cores) * 100.0);
+    if (cpu_percentage > 100) cpu_percentage = 100;
+    
+    char cpu_bar[96];
+    build_progress_bar(cpu_bar, sizeof(cpu_bar), cpu_percentage, bar_length);
+    snprintf(cpu_load_str, str_size, " | \033[36mCPU Load\033[0m: %s%d%%", cpu_bar, cpu_percentage);
+}
+
 void get_memory(system_info_t *info) {
     struct sysinfo s_info;
-    if (sysinfo(&s_info) == 0) {
-        unsigned long total_mem = s_info.totalram * s_info.mem_unit;
-        unsigned long free_mem = s_info.freeram * s_info.mem_unit;
-        unsigned long used_mem = total_mem - free_mem;
-        
-        char used_str[32], total_str[32];
-        format_memory(used_mem, used_str, sizeof(used_str));
-        format_memory(total_mem, total_str, sizeof(total_str));
-        
-        // Calculate percentage
-        int percentage = (int)((double)used_mem / (double)total_mem * 100.0);
-        
-        // Create visual progress bar
-        const int bar_length = 8;   // Shorter bar to fit in memory field
-        int filled_blocks = (percentage * bar_length) / 100;
-        char progress_bar[128];  // Increased buffer size for ANSI codes (8 blocks * ~9 bytes each + overhead)
-        
-        // Build the progress bar with color coding using ASCII characters
-        int bar_pos = 0;
-        bar_pos += snprintf(progress_bar + bar_pos, sizeof(progress_bar) - bar_pos, "\033[36m[");
-        
-        for (int i = 0; i < bar_length && bar_pos < (int)(sizeof(progress_bar) - 1); i++) {
-            if (i < filled_blocks) {
-                if (percentage < 60) {
-                    bar_pos += snprintf(progress_bar + bar_pos, sizeof(progress_bar) - bar_pos, "\033[32m#");
-                } else if (percentage < 80) {
-                    bar_pos += snprintf(progress_bar + bar_pos, sizeof(progress_bar) - bar_pos, "\033[33m#");
-                } else {
-                    bar_pos += snprintf(progress_bar + bar_pos, sizeof(progress_bar) - bar_pos, "\033[31m#");
-                }
-            } else {
-                bar_pos += snprintf(progress_bar + bar_pos, sizeof(progress_bar) - bar_pos, "\033[90m-");
-            }
-        }
-        
-        snprintf(progress_bar + bar_pos, sizeof(progress_bar) - bar_pos, "\033[36m]\033[0m");
-        
-        // Get CPU load average (1 minute average)
-        double loadavg[3];
-        char cpu_load_str[192] = "";
-        if (getloadavg(loadavg, 1) != -1) {
-            // Get number of CPU cores
-            long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-            if (num_cores > 0) {
-                // Calculate CPU load percentage based on 1-minute load average
-                int cpu_percentage = (int)((loadavg[0] / num_cores) * 100.0);
-                if (cpu_percentage > 100) cpu_percentage = 100; // Cap at 100%
-                
-                // Create CPU load bar (exact size: opening + 8 blocks + closing)
-                int cpu_filled = (cpu_percentage * bar_length) / 100;
-                char cpu_bar[96];  // Sufficient for progress bar with ANSI codes
-                int cpu_bar_pos = 0;
-                cpu_bar_pos += snprintf(cpu_bar + cpu_bar_pos, sizeof(cpu_bar) - cpu_bar_pos, "\033[36m[");
-                
-                for (int i = 0; i < bar_length && cpu_bar_pos < (int)(sizeof(cpu_bar) - 1); i++) {
-                    if (i < cpu_filled) {
-                        if (cpu_percentage < 60) {
-                            cpu_bar_pos += snprintf(cpu_bar + cpu_bar_pos, sizeof(cpu_bar) - cpu_bar_pos, "\033[32m#");
-                        } else if (cpu_percentage < 80) {
-                            cpu_bar_pos += snprintf(cpu_bar + cpu_bar_pos, sizeof(cpu_bar) - cpu_bar_pos, "\033[33m#");
-                        } else {
-                            cpu_bar_pos += snprintf(cpu_bar + cpu_bar_pos, sizeof(cpu_bar) - cpu_bar_pos, "\033[31m#");
-                        }
-                    } else {
-                        cpu_bar_pos += snprintf(cpu_bar + cpu_bar_pos, sizeof(cpu_bar) - cpu_bar_pos, "\033[90m-");
-                    }
-                }
-                
-                snprintf(cpu_bar + cpu_bar_pos, sizeof(cpu_bar) - cpu_bar_pos, "\033[36m]\033[0m");
-                snprintf(cpu_load_str, sizeof(cpu_load_str), " | \033[36mCPU Load\033[0m: %s%d%%", cpu_bar, cpu_percentage);
-            }
-        }
-        
-        snprintf(info->memory, sizeof(info->memory), "%.12s/%.12s %s%d%%%s", used_str, total_str, progress_bar, percentage, cpu_load_str);
-        info->memory_bar[0] = '\0'; // Clear since we combined it
-    } else {
+    
+    if (sysinfo(&s_info) != 0) {
         strncpy(info->memory, "Unknown", sizeof(info->memory) - 1);
         strncpy(info->memory_bar, "Unknown", sizeof(info->memory_bar) - 1);
+        info->memory[sizeof(info->memory) - 1] = '\0';
+        info->memory_bar[sizeof(info->memory_bar) - 1] = '\0';
+        return;
     }
+    
+    unsigned long total_mem = s_info.totalram * s_info.mem_unit;
+    unsigned long free_mem = s_info.freeram * s_info.mem_unit;
+    unsigned long used_mem = total_mem - free_mem;
+    
+    char used_str[32], total_str[32];
+    format_memory(used_mem, used_str, sizeof(used_str));
+    format_memory(total_mem, total_str, sizeof(total_str));
+    
+    int percentage = (int)((double)used_mem / (double)total_mem * 100.0);
+    
+    const int bar_length = 8;
+    char progress_bar[128];
+    build_progress_bar(progress_bar, sizeof(progress_bar), percentage, bar_length);
+    
+    char cpu_load_str[192] = "";
+    get_cpu_load_string(cpu_load_str, sizeof(cpu_load_str), bar_length);
+    
+    snprintf(info->memory, sizeof(info->memory), "%.12s/%.12s %s%d%%%s", 
+             used_str, total_str, progress_bar, percentage, cpu_load_str);
+    info->memory_bar[0] = '\0';
     info->memory[sizeof(info->memory) - 1] = '\0';
     info->memory_bar[sizeof(info->memory_bar) - 1] = '\0';
 }

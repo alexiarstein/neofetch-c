@@ -72,24 +72,31 @@ void detect_distro_name(char *distro_name, size_t size) {
     
     // Method 1: /etc/os-release
     content = read_file_content("/etc/os-release");
-    if (content) {
-        char *name_start = strstr(content, "NAME=");
-        if (name_start) {
-            name_start += 5; // Skip "NAME="
-            if (*name_start == '"') name_start++; // Skip quote
-            
-            char *name_end = strchr(name_start, '"');
-            if (name_end) *name_end = '\0';
-            else {
-                name_end = strchr(name_start, '\n');
-                if (name_end) *name_end = '\0';
-            }
-            
-            strncpy(distro_name, name_start, size - 1);
-            distro_name[size - 1] = '\0';
-            return;
-        }
+    if (!content) {
+        goto try_lsb_release;
     }
+    
+    char *name_start = strstr(content, "NAME=");
+    if (!name_start) {
+        goto try_lsb_release;
+    }
+    
+    name_start += 5; // Skip "NAME="
+    if (*name_start == '"') name_start++; // Skip quote
+    
+    char *name_end = strchr(name_start, '"');
+    if (!name_end) {
+        name_end = strchr(name_start, '\n');
+    }
+    if (name_end) {
+        *name_end = '\0';
+    }
+    
+    strncpy(distro_name, name_start, size - 1);
+    distro_name[size - 1] = '\0';
+    return;
+    
+try_lsb_release:
     
     // Method 2: lsb_release
     content = execute_command("lsb_release -si 2>/dev/null");
