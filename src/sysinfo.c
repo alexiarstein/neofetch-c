@@ -65,6 +65,33 @@ static void format_wm_name(const char *raw_name, char *dest, size_t dest_size) {
     }
 }
 
+// Helper function to execute command and try to set result
+static bool try_command_and_set(const char *command, char *dest, size_t dest_size) {
+    char *result = execute_command(command);
+    if (result && strnlen(result, dest_size) > 0) {
+        safe_set_string(dest, result, dest_size);
+        return true;
+    }
+    return false;
+}
+
+// Helper function to check if process is running
+static bool is_process_running(const char *process_name) {
+    char command[256];
+    snprintf(command, sizeof(command), "pgrep -x %s >/dev/null 2>&1", process_name);
+    char *result = execute_command(command);
+    return (result && atoi(result) == 0);
+}
+
+// Helper function for setting WM based on process check
+static bool try_wm_process_check(const char *process_name, const char *wm_name, char *dest, size_t dest_size) {
+    if (is_process_running(process_name)) {
+        safe_set_string(dest, wm_name, dest_size);
+        return true;
+    }
+    return false;
+}
+
 // refactored this to make it thread-safe.
 void get_user_hostname(system_info_t *info) {
     struct passwd pwd = {0};
@@ -125,29 +152,25 @@ void get_distro(system_info_t *info) {
         fclose(file);
         
         if (strnlen(pretty_name, sizeof(pretty_name)) > 0) {
-            safe_strcpy(info->distro, pretty_name, sizeof(info->distro));
+            safe_set_string(info->distro, pretty_name, sizeof(info->distro));
         } else if (strnlen(id, sizeof(id)) > 0) {
             if (strnlen(version_id, sizeof(version_id)) > 0) {
                 snprintf(info->distro, sizeof(info->distro), "%s %s", id, version_id);
+                info->distro[sizeof(info->distro) - 1] = '\0';
             } else {
-                safe_strcpy(info->distro, id, sizeof(info->distro));
+                safe_set_string(info->distro, id, sizeof(info->distro));
             }
         }
-        info->distro[sizeof(info->distro) - 1] = '\0';
         return;
     }
     
     // NEW: Fallback if /etc/os-release is not present. We try to get it from lsb_release -- Alexia
-    const char *result = execute_command("lsb_release -d 2>/dev/null | cut -f2");
-    if (result && strnlen(result, sizeof(info->distro)) > 0) {
-        safe_strcpy(info->distro, result, sizeof(info->distro));
-        info->distro[sizeof(info->distro) - 1] = '\0';
+    if (try_command_and_set("lsb_release -d 2>/dev/null | cut -f2", info->distro, sizeof(info->distro))) {
         return;
     }
     
     // If all else fails, we display it as "Linux" (not ideal but good enough for now)
-    safe_strcpy(info->distro, "Linux", sizeof(info->distro));
-    info->distro[sizeof(info->distro) - 1] = '\0';
+    safe_set_string(info->distro, "Linux", sizeof(info->distro));
 }
 
 void get_architecture(system_info_t *info) {
@@ -238,11 +261,8 @@ void get_hardware(system_info_t *info) {
     get_hardware_from_hostnamectl(vendor, sizeof(vendor), model, sizeof(model));
     
     // Storing results using the new function safe_strcpy to avoid involuntary overflows
-    safe_strcpy(info->hardware, vendor, sizeof(info->hardware));
-    info->hardware[sizeof(info->hardware) - 1] = '\0';
-    
-    safe_strcpy(info->model, model, sizeof(info->model));
-    info->model[sizeof(info->model) - 1] = '\0';
+    safe_set_string(info->hardware, vendor, sizeof(info->hardware));
+    safe_set_string(info->model, model, sizeof(info->model));
 }
 
 void get_kernel(system_info_t *info) {
@@ -250,10 +270,10 @@ void get_kernel(system_info_t *info) {
     if (uname(&uts) == 0) {
         // Truncate to fit in buffer
         snprintf(info->kernel, sizeof(info->kernel), "%.60s %.60s", uts.sysname, uts.release);
+        info->kernel[sizeof(info->kernel) - 1] = '\0';
     } else {
-        safe_strcpy(info->kernel, "Unknown", sizeof(info->kernel));
+        safe_set_string(info->kernel, "Unknown", sizeof(info->kernel));
     }
-    info->kernel[sizeof(info->kernel) - 1] = '\0';
 }
 
 void get_uptime(system_info_t *info) {
@@ -563,22 +583,14 @@ void get_window_manager(system_info_t *info) {
     
     // Method 2: Check for Wayland compositors
     if (getenv("WAYLAND_DISPLAY")) {
-        if (getenv("SWAYSOCK")) {
-            safe_strcpy(info->wm, "Sway", sizeof(info->wm));
-        } else if (execute_command("pgrep -x sway >/dev/null 2>&1; echo $?") && 
-                   atoi(execute_command("pgrep -x sway >/dev/null 2>&1; echo $?")) == 0) {
-            safe_strcpy(info->wm, "Sway", sizeof(info->wm));
-        } else if (execute_command("pgrep -x kwin_wayland >/dev/null 2>&1; echo $?") && 
-                   atoi(execute_command("pgrep -x kwin_wayland >/dev/null 2>&1; echo $?")) == 0) {
-            safe_strcpy(info->wm, "KWin", sizeof(info->wm));
-        } else if (execute_command("pgrep -x mutter >/dev/null 2>&1; echo $?") && 
-                   atoi(execute_command("pgrep -x mutter >/dev/null 2>&1; echo $?")) == 0) {
-            safe_strcpy(info->wm, "Mutter", sizeof(info->wm));
-        } else if (execute_command("pgrep -x weston >/dev/null 2>&1; echo $?") && 
-                   atoi(execute_command("pgrep -x weston >/dev/null 2>&1; echo $?")) == 0) {
-            safe_strcpy(info->wm, "Weston", sizeof(info->wm));
+        if (getenv("SWAYSOCK") || try_wm_process_check("sway", "Sway", info->wm, sizeof(info->wm))) {
+            return;
+        } else if (try_wm_process_check("kwin_wayland", "KWin", info->wm, sizeof(info->wm)) ||
+                   try_wm_process_check("mutter", "Mutter", info->wm, sizeof(info->wm)) ||
+                   try_wm_process_check("weston", "Weston", info->wm, sizeof(info->wm))) {
+            return;
         } else {
-            safe_strcpy(info->wm, "Unknown", sizeof(info->wm));
+            safe_set_string(info->wm, "Unknown", sizeof(info->wm));
         }
     } else {
         // Method 3: Check for X11 window managers via process detection
@@ -605,8 +617,7 @@ void get_window_manager(system_info_t *info) {
 
 void get_wm_theme(system_info_t *info) {
     // This is quite complex and varies by WM/DE
-    safe_strcpy(info->wm_theme, "Unknown", sizeof(info->wm_theme));
-    info->wm_theme[sizeof(info->wm_theme) - 1] = '\0';
+    safe_set_string(info->wm_theme, "Unknown", sizeof(info->wm_theme));
 }
 
 void get_theme(system_info_t *info) {
@@ -615,13 +626,11 @@ void get_theme(system_info_t *info) {
     // Try gsettings for GTK theme
     result = execute_command("gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d \"'\"");
     if (result && strnlen(result, sizeof(info->theme)) > 0 && strcmp(result, "''") != 0) {
-        safe_strcpy(info->theme, result, sizeof(info->theme));
-        info->theme[sizeof(info->theme) - 1] = '\0';
+        safe_set_string(info->theme, result, sizeof(info->theme));
         return;
     }
     
-    safe_strcpy(info->theme, "Unknown", sizeof(info->theme));
-    info->theme[sizeof(info->theme) - 1] = '\0';
+    safe_set_string(info->theme, "Unknown", sizeof(info->theme));
 }
 
 void get_icons(system_info_t *info) {
@@ -774,10 +783,8 @@ void get_memory(system_info_t *info) {
     struct sysinfo s_info;
     
     if (sysinfo(&s_info) != 0) {
-        safe_strcpy(info->memory, "Unknown", sizeof(info->memory));
-        safe_strcpy(info->memory_bar, "Unknown", sizeof(info->memory_bar));
-        info->memory[sizeof(info->memory) - 1] = '\0';
-        info->memory_bar[sizeof(info->memory_bar) - 1] = '\0';
+        safe_set_string(info->memory, "Unknown", sizeof(info->memory));
+        safe_set_string(info->memory_bar, "Unknown", sizeof(info->memory_bar));
         return;
     }
     
@@ -799,7 +806,6 @@ void get_memory(system_info_t *info) {
              used_str, total_str, progress_bar, percentage);
     info->memory_bar[0] = '\0';
     info->memory[sizeof(info->memory) - 1] = '\0';
-    info->memory_bar[sizeof(info->memory_bar) - 1] = '\0';
 }
 
 void get_model(system_info_t *info) {
@@ -810,13 +816,12 @@ void get_model(system_info_t *info) {
         char *vendor = read_file_content("/sys/devices/virtual/dmi/id/sys_vendor");
         if (vendor && strnlen(vendor, 256) > 0) {
             snprintf(info->model, sizeof(info->model), "%s %s", vendor, result);
+            info->model[sizeof(info->model) - 1] = '\0';
         } else {
-            safe_strcpy(info->model, result, sizeof(info->model));
+            safe_set_string(info->model, result, sizeof(info->model));
         }
-        info->model[sizeof(info->model) - 1] = '\0';
         return;
     }
     
-    safe_strcpy(info->model, "Unknown", sizeof(info->model));
-    info->model[sizeof(info->model) - 1] = '\0';
+    safe_set_string(info->model, "Unknown", sizeof(info->model));
 }
