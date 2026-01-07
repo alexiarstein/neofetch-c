@@ -109,7 +109,8 @@ void get_architecture(system_info_t *info) {
         }
         info->architecture[sizeof(info->architecture) - 1] = '\0';
     } else {
-        strcpy(info->architecture, "Unknown");
+        strncpy(info->architecture, "Unknown", sizeof(info->architecture) - 1);
+        info->architecture[sizeof(info->architecture) - 1] = '\0';
     }
 }
 
@@ -161,14 +162,15 @@ static void get_hardware_from_hostnamectl(char *vendor, size_t vendor_size, char
         return;
     }
     
-    char *line = strtok(hostnamectl_output, "\n");
+    char *saveptr;
+    char *line = strtok_r(hostnamectl_output, "\n", &saveptr);
     while (line != NULL) {
         if (strstr(line, "Hardware Vendor:") && strcmp(vendor, "Unknown") == 0) {
             extract_value_after_colon(line, vendor, vendor_size);
         } else if (strstr(line, "Hardware Model:") && strcmp(model, "Unknown") == 0) {
             extract_value_after_colon(line, model, model_size);
         }
-        line = strtok(NULL, "\n");
+        line = strtok_r(NULL, "\n", &saveptr);
     }
 }
 
@@ -693,23 +695,24 @@ void get_memory(system_info_t *info) {
         char progress_bar[128];  // Increased buffer size for ANSI codes (8 blocks * ~9 bytes each + overhead)
         
         // Build the progress bar with color coding using ASCII characters
-        strcpy(progress_bar, "\033[36m["); // Cyan opening bracket
+        int bar_pos = 0;
+        bar_pos += snprintf(progress_bar + bar_pos, sizeof(progress_bar) - bar_pos, "\033[36m[");
         
-        for (int i = 0; i < bar_length; i++) {
+        for (int i = 0; i < bar_length && bar_pos < (int)(sizeof(progress_bar) - 1); i++) {
             if (i < filled_blocks) {
                 if (percentage < 60) {
-                    strcat(progress_bar, "\033[32m#"); // Green for low usage
+                    bar_pos += snprintf(progress_bar + bar_pos, sizeof(progress_bar) - bar_pos, "\033[32m#");
                 } else if (percentage < 80) {
-                    strcat(progress_bar, "\033[33m#"); // Yellow for medium usage  
+                    bar_pos += snprintf(progress_bar + bar_pos, sizeof(progress_bar) - bar_pos, "\033[33m#");
                 } else {
-                    strcat(progress_bar, "\033[31m#"); // Red for high usage
+                    bar_pos += snprintf(progress_bar + bar_pos, sizeof(progress_bar) - bar_pos, "\033[31m#");
                 }
             } else {
-                strcat(progress_bar, "\033[90m-"); // Dark gray for empty
+                bar_pos += snprintf(progress_bar + bar_pos, sizeof(progress_bar) - bar_pos, "\033[90m-");
             }
         }
         
-        strcat(progress_bar, "\033[36m]\033[0m"); // Cyan closing bracket + reset
+        snprintf(progress_bar + bar_pos, sizeof(progress_bar) - bar_pos, "\033[36m]\033[0m");
         
         // Get CPU load average (1 minute average)
         double loadavg[3];
@@ -725,29 +728,30 @@ void get_memory(system_info_t *info) {
                 // Create CPU load bar (exact size: opening + 8 blocks + closing)
                 int cpu_filled = (cpu_percentage * bar_length) / 100;
                 char cpu_bar[96];  // Sufficient for progress bar with ANSI codes
-                strcpy(cpu_bar, "\033[36m[");
+                int cpu_bar_pos = 0;
+                cpu_bar_pos += snprintf(cpu_bar + cpu_bar_pos, sizeof(cpu_bar) - cpu_bar_pos, "\033[36m[");
                 
-                for (int i = 0; i < bar_length; i++) {
+                for (int i = 0; i < bar_length && cpu_bar_pos < (int)(sizeof(cpu_bar) - 1); i++) {
                     if (i < cpu_filled) {
                         if (cpu_percentage < 60) {
-                            strcat(cpu_bar, "\033[32m#"); // Green for low usage
+                            cpu_bar_pos += snprintf(cpu_bar + cpu_bar_pos, sizeof(cpu_bar) - cpu_bar_pos, "\033[32m#");
                         } else if (cpu_percentage < 80) {
-                            strcat(cpu_bar, "\033[33m#"); // Yellow for medium usage  
+                            cpu_bar_pos += snprintf(cpu_bar + cpu_bar_pos, sizeof(cpu_bar) - cpu_bar_pos, "\033[33m#");
                         } else {
-                            strcat(cpu_bar, "\033[31m#"); // Red for high usage
+                            cpu_bar_pos += snprintf(cpu_bar + cpu_bar_pos, sizeof(cpu_bar) - cpu_bar_pos, "\033[31m#");
                         }
                     } else {
-                        strcat(cpu_bar, "\033[90m-"); // Dark gray for empty
+                        cpu_bar_pos += snprintf(cpu_bar + cpu_bar_pos, sizeof(cpu_bar) - cpu_bar_pos, "\033[90m-");
                     }
                 }
                 
-                strcat(cpu_bar, "\033[36m]\033[0m");
+                snprintf(cpu_bar + cpu_bar_pos, sizeof(cpu_bar) - cpu_bar_pos, "\033[36m]\033[0m");
                 snprintf(cpu_load_str, sizeof(cpu_load_str), " | \033[36mCPU Load\033[0m: %s%d%%", cpu_bar, cpu_percentage);
             }
         }
         
         snprintf(info->memory, sizeof(info->memory), "%.12s/%.12s %s%d%%%s", used_str, total_str, progress_bar, percentage, cpu_load_str);
-        strcpy(info->memory_bar, ""); // Clear since we combined it
+        info->memory_bar[0] = '\0'; // Clear since we combined it
     } else {
         strncpy(info->memory, "Unknown", sizeof(info->memory) - 1);
         strncpy(info->memory_bar, "Unknown", sizeof(info->memory_bar) - 1);
