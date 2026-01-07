@@ -26,13 +26,19 @@
 // but I'll get it working soonish. -- Alexia
 
 
-// Another note (this one for contributors)
-// The simplest way to add support for a new distro's ASCII art is to add an entry
-// to the `distro_mappings` array below, mapping a normalized distro name pattern
-// to the corresponding ASCII art filename located in the `ascii/` directory.
+/* 
+ Another note (this one for contributors)
+ The simplest way to add support for a new distro's ASCII art is to add an entry
+ to the `distro_mappings` array below, mapping a normalized distro name pattern
+ to the corresponding ASCII art filename located in the `ascii/` directory.
 
-// And please, please, please... Follow the alphabetic order. Don't put a distro starting with the letter Z next to GoldenDog, (heh)
-
+ And please, please, please... Follow the alphabetic order. Don't put a distro starting with the letter Z next to GoldenDog, (heh)
+ Also note that most of the ascii art has been salvaged from the original neofetch script by Dylan Araps (now abandoned)
+ But things change, distros change, some logos change.
+ So if your distro is not here or the logo needs some love, please fix and send a pull request or open an issue. 
+ Some do need recoloring. 
+ I will try to update some as time allows it. But my main focus is Debian and GoldenDog for obvious reasons.
+*/
 
 typedef struct {
     const char *distro_pattern;
@@ -302,7 +308,7 @@ static int file_exists_in_paths(const char *filename) {
     // if we cant find it there, we check local,
     // otherwise we fall back to the relative path, for debugging, development, etc
     // (to avoid sudo make install during testing, mostly.) -- Alexia
-    
+
     const char *search_dirs[] = {
         "/usr/share/neofetch/ascii",
         "/usr/local/share/neofetch/ascii",

@@ -16,6 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// Control.
+
+
 #include "neofetch.h"
 
 int main(int argc __attribute__((unused)), char *argv[] __attribute__((unused))) {
