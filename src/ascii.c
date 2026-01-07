@@ -558,6 +558,7 @@ static int build_display_entries(const system_info_t *info, info_entry_t *entrie
     };
     
     int entry_count = 0;
+    int num_info_lines = sizeof(info_lines) / sizeof(info_lines[0]);
     
     // First entry is always user@hostname
     entries[entry_count].label = "";
@@ -565,7 +566,7 @@ static int build_display_entries(const system_info_t *info, info_entry_t *entrie
     entry_count++;
     
     // Add other entries if they have valid content
-    for (int i = 1; i < 18 && entry_count < max_entries; i++) {
+    for (int i = 1; i < num_info_lines && entry_count < max_entries; i++) {
         if (should_display_info(info_lines[i])) {
             entries[entry_count].label = info_labels[i];
             entries[entry_count].content = info_lines[i];
