@@ -794,17 +794,42 @@ static void build_progress_bar(char *bar, size_t bar_size, int percentage, int b
 }
 
 void get_memory(system_info_t *info) {
-    struct sysinfo s_info;
-    
-    if (sysinfo(&s_info) != 0) {
+    FILE *fp = fopen("/proc/meminfo", "r");
+    if (!fp) {
         safe_set_string(info->memory, "Unknown", sizeof(info->memory));
         safe_set_string(info->memory_bar, "Unknown", sizeof(info->memory_bar));
         return;
     }
     
-    unsigned long total_mem = s_info.totalram * s_info.mem_unit;
-    unsigned long free_mem = s_info.freeram * s_info.mem_unit;
-    unsigned long used_mem = total_mem - free_mem;
+    unsigned long mem_total = 0, mem_available = 0, mem_free = 0, buffers = 0, cached = 0;
+    char line[256];
+    
+    while (fgets(line, sizeof(line), fp)) {
+        if (sscanf(line, "MemTotal: %lu kB", &mem_total) == 1) continue;
+        if (sscanf(line, "MemAvailable: %lu kB", &mem_available) == 1) continue;
+        if (sscanf(line, "MemFree: %lu kB", &mem_free) == 1) continue;
+        if (sscanf(line, "Buffers: %lu kB", &buffers) == 1) continue;
+        if (sscanf(line, "Cached: %lu kB", &cached) == 1) continue;
+    }
+    fclose(fp);
+    
+    if (mem_total == 0) {
+        safe_set_string(info->memory, "Unknown", sizeof(info->memory));
+        safe_set_string(info->memory_bar, "Unknown", sizeof(info->memory_bar));
+        return;
+    }
+    
+    // Convert from kB to bytes
+    unsigned long total_mem = mem_total * 1024;
+    unsigned long used_mem;
+    
+    // Use MemAvailable if available (kernel 3.14+), otherwise calculate manually
+    if (mem_available > 0) {
+        used_mem = (mem_total - mem_available) * 1024;
+    } else {
+        // Fallback for older kernels: MemTotal - MemFree - Buffers - Cached
+        used_mem = (mem_total - mem_free - buffers - cached) * 1024;
+    }
     
     char used_str[32], total_str[32];
     format_memory(used_mem, used_str, sizeof(used_str));
