@@ -20,8 +20,8 @@
 
 void get_user_hostname(system_info_t *info) {
     // Get username using thread-safe version
-    struct passwd pwd;
-    struct passwd *result;
+    struct passwd pwd = {0};
+    struct passwd *result = NULL;
     char buf[1024];
     
     if (getpwuid_r(getuid(), &pwd, buf, sizeof(buf), &result) == 0 && result != NULL) {
@@ -354,67 +354,93 @@ void get_resolution(system_info_t *info) {
     info->resolution[sizeof(info->resolution) - 1] = '\0';
 }
 
-void get_desktop_environment(system_info_t *info) {
+// Helper function to detect desktop environment name
+static void detect_de_name(char *de_with_display, size_t size) {
     char *de = NULL;
-    char de_with_display[128] = {0};
-    char version_info[64] = {0};
     
-    // Check environment variables
     if ((de = getenv("XDG_CURRENT_DESKTOP"))) {
-        strncpy(de_with_display, de, sizeof(de_with_display) - 1);
+        strncpy(de_with_display, de, size - 1);
     } else if ((de = getenv("DESKTOP_SESSION"))) {
-        strncpy(de_with_display, de, sizeof(de_with_display) - 1);
+        strncpy(de_with_display, de, size - 1);
     } else if ((de = getenv("XDG_SESSION_DESKTOP"))) {
-        strncpy(de_with_display, de, sizeof(de_with_display) - 1);
+        strncpy(de_with_display, de, size - 1);
     } else if (getenv("KDE_FULL_SESSION")) {
-        strncpy(de_with_display, "KDE", sizeof(de_with_display) - 1);
+        strncpy(de_with_display, "KDE", size - 1);
     } else if (getenv("GNOME_DESKTOP_SESSION_ID")) {
-        strncpy(de_with_display, "GNOME", sizeof(de_with_display) - 1);
+        strncpy(de_with_display, "GNOME", size - 1);
     } else {
-        strncpy(de_with_display, "Unknown", sizeof(de_with_display) - 1);
+        strncpy(de_with_display, "Unknown", size - 1);
     }
-    
-    // Get version information for specific DEs
+    de_with_display[size - 1] = '\0';
+}
+
+// Helper function to get DE version with fallback
+static void get_de_version_info(const char *version_cmd, const char *fallback, 
+                                 char *version_info, size_t size) {
+    char *version = execute_command(version_cmd);
+    if (version && strlen(version) > 0) {
+        snprintf(version_info, size, "%s", version);
+    } else {
+        strncpy(version_info, fallback, size - 1);
+        version_info[size - 1] = '\0';
+    }
+}
+
+// Helper function to get version information for specific DEs
+static void get_de_version(const char *de_with_display, char *version_info, size_t size) {
     if (strstr(de_with_display, "KDE") || strstr(de_with_display, "plasma")) {
-        char *plasma_version = execute_command("plasmashell --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+'");
-        if (plasma_version && strlen(plasma_version) > 0) {
-            snprintf(version_info, sizeof(version_info), "Plasma %.20s", plasma_version);
+        char temp[64];
+        get_de_version_info("plasmashell --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+'",
+                           "KDE", temp, sizeof(temp));
+        if (strstr(temp, ".")) {
+            snprintf(version_info, size, "Plasma %.20s", temp);
         } else {
-            strncpy(version_info, "KDE", sizeof(version_info) - 1);
+            strncpy(version_info, temp, size - 1);
         }
     } else if (strstr(de_with_display, "GNOME")) {
-        char *gnome_version = execute_command("gnome-shell --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+'");
-        if (gnome_version && strlen(gnome_version) > 0) {
-            snprintf(version_info, sizeof(version_info), "GNOME %.20s", gnome_version);
+        char temp[64];
+        get_de_version_info("gnome-shell --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+'",
+                           "GNOME", temp, sizeof(temp));
+        if (strstr(temp, ".")) {
+            snprintf(version_info, size, "GNOME %.20s", temp);
         } else {
-            strncpy(version_info, "GNOME", sizeof(version_info) - 1);
+            strncpy(version_info, temp, size - 1);
         }
     } else if (strstr(de_with_display, "XFCE")) {
-        char *xfce_version = execute_command("xfce4-session --version 2>/dev/null | head -1 | grep -o '[0-9]\\+\\.[0-9]\\+'");
-        if (xfce_version && strlen(xfce_version) > 0) {
-            snprintf(version_info, sizeof(version_info), "Xfce %.20s", xfce_version);
+        char temp[64];
+        get_de_version_info("xfce4-session --version 2>/dev/null | head -1 | grep -o '[0-9]\\+\\.[0-9]\\+'",
+                           de_with_display, temp, sizeof(temp));
+        if (strstr(temp, ".")) {
+            snprintf(version_info, size, "Xfce %.20s", temp);
         } else {
-            strncpy(version_info, de_with_display, sizeof(version_info) - 1);
+            strncpy(version_info, temp, size - 1);
         }
     } else if (strstr(de_with_display, "MATE")) {
-        char *mate_version = execute_command("mate-session --version 2>/dev/null | head -1 | grep -o '[0-9]\\+\\.[0-9]\\+'");
-        if (mate_version && strlen(mate_version) > 0) {
-            snprintf(version_info, sizeof(version_info), "MATE %.20s", mate_version);
+        char temp[64];
+        get_de_version_info("mate-session --version 2>/dev/null | head -1 | grep -o '[0-9]\\+\\.[0-9]\\+'",
+                           de_with_display, temp, sizeof(temp));
+        if (strstr(temp, ".")) {
+            snprintf(version_info, size, "MATE %.20s", temp);
         } else {
-            strncpy(version_info, de_with_display, sizeof(version_info) - 1);
+            strncpy(version_info, temp, size - 1);
         }
     } else if (strstr(de_with_display, "Cinnamon")) {
-        char *cinnamon_version = execute_command("cinnamon --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+'");
-        if (cinnamon_version && strlen(cinnamon_version) > 0) {
-            snprintf(version_info, sizeof(version_info), "Cinnamon %.15s", cinnamon_version);
+        char temp[64];
+        get_de_version_info("cinnamon --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+'",
+                           de_with_display, temp, sizeof(temp));
+        if (strstr(temp, ".")) {
+            snprintf(version_info, size, "Cinnamon %.15s", temp);
         } else {
-            strncpy(version_info, de_with_display, sizeof(version_info) - 1);
+            strncpy(version_info, temp, size - 1);
         }
     } else {
-        strncpy(version_info, de_with_display, sizeof(version_info) - 1);
+        strncpy(version_info, de_with_display, size - 1);
+        version_info[size - 1] = '\0';
     }
-    
-    // Detect display server (X11/Wayland)
+}
+
+// Helper function to format DE with display server
+static void format_de_with_server(system_info_t *info, const char *version_info) {
     if (getenv("WAYLAND_DISPLAY")) {
         if (strlen(version_info) > 0 && strcmp(version_info, "Unknown") != 0) {
             snprintf(info->de, sizeof(info->de), "%.50s (Wayland)", version_info);
@@ -430,8 +456,16 @@ void get_desktop_environment(system_info_t *info) {
     } else {
         strncpy(info->de, version_info, sizeof(info->de) - 1);
     }
-    
     info->de[sizeof(info->de) - 1] = '\0';
+}
+
+void get_desktop_environment(system_info_t *info) {
+    char de_with_display[128] = {0};
+    char version_info[64] = {0};
+    
+    detect_de_name(de_with_display, sizeof(de_with_display));
+    get_de_version(de_with_display, version_info, sizeof(version_info));
+    format_de_with_server(info, version_info);
 }
 
 void get_display_manager(system_info_t *info) {
@@ -645,9 +679,18 @@ static void build_progress_bar(char *bar, size_t bar_size, int percentage, int b
     bar_pos += snprintf(bar + bar_pos, bar_size - bar_pos, "\033[36m[");
     
     for (int i = 0; i < bar_length && bar_pos < (int)(bar_size - 1); i++) {
-        const char *color = (i < filled_blocks) ? 
-            (percentage < 60 ? "\033[32m#" : (percentage < 80 ? "\033[33m#" : "\033[31m#")) :
-            "\033[90m-";
+        const char *color;
+        if (i < filled_blocks) {
+            if (percentage < 60) {
+                color = "\033[32m#";  // Green
+            } else if (percentage < 80) {
+                color = "\033[33m#";  // Yellow
+            } else {
+                color = "\033[31m#";  // Red
+            }
+        } else {
+            color = "\033[90m-";  // Dark gray
+        }
         bar_pos += snprintf(bar + bar_pos, bar_size - bar_pos, "%s", color);
     }
     
