@@ -18,7 +18,7 @@ TARGET = neofetch
 SOURCES = $(wildcard $(SRCDIR)/*.c)
 OBJECTS = $(SOURCES:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
 
-.PHONY: all clean install
+.PHONY: all clean install uninstall
 
 all: $(TARGET)
 
@@ -35,7 +35,13 @@ clean:
 	rm -rf $(OBJDIR) $(TARGET)
 
 install: $(TARGET)
-	cp $(TARGET) /usr/local/bin/
+	install -D -m 755 $(TARGET) /usr/local/bin/$(TARGET)
+	install -d /usr/share/neofetch/ascii
+	install -m 644 ascii/*.ascii /usr/share/neofetch/ascii/
+
+uninstall:
+	rm -f /usr/local/bin/$(TARGET)
+	rm -rf /usr/share/neofetch
 
 .PHONY: debug
 debug: CFLAGS += -g -DDEBUG

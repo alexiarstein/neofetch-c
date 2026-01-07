@@ -317,7 +317,28 @@ void get_shell(system_info_t *info) {
         char *shell_name = strrchr(shell, '/');
         if (shell_name) {
             shell_name++; // Skip the '/'
-            strncpy(info->shell, shell_name, sizeof(info->shell) - 1);
+            
+            // Try to get shell version
+            char *version_result = NULL;
+            
+            if (strcmp(shell_name, "bash") == 0) {
+                version_result = execute_command("bash --version 2>/dev/null | head -1 | grep -oP 'version \\K[0-9.]+'");
+            } else if (strcmp(shell_name, "zsh") == 0) {
+                version_result = execute_command("zsh --version 2>/dev/null | grep -oP '[0-9.]+' | head -1");
+            } else if (strcmp(shell_name, "fish") == 0) {
+                version_result = execute_command("fish --version 2>/dev/null | grep -oP '[0-9.]+'");
+            } else if (strcmp(shell_name, "dash") == 0 || strcmp(shell_name, "sh") == 0) {
+                // dash/sh often don't have easy version flags, just use name
+                strncpy(info->shell, shell_name, sizeof(info->shell) - 1);
+                info->shell[sizeof(info->shell) - 1] = '\0';
+                return;
+            }
+            
+            if (version_result && strlen(version_result) > 0) {
+                snprintf(info->shell, sizeof(info->shell), "%s %s", shell_name, version_result);
+            } else {
+                strncpy(info->shell, shell_name, sizeof(info->shell) - 1);
+            }
         } else {
             strncpy(info->shell, shell, sizeof(info->shell) - 1);
         }
@@ -330,8 +351,8 @@ void get_shell(system_info_t *info) {
 void get_resolution(system_info_t *info) {
     char *result;
     
-    // Try xrandr first (for X11)
-    result = execute_command("xrandr --current 2>/dev/null | grep ' connected' | grep -o '[0-9]\\+x[0-9]\\+' | head -1");
+    // Try xrandr first (for X11) - get all connected monitor resolutions
+    result = execute_command("xrandr --current 2>/dev/null | grep ' connected' | grep -o '[0-9]\\+x[0-9]\\+' | tr '\\n' ', ' | sed 's/,$//' | sed 's/,/, /g'");
     if (result && strlen(result) > 0) {
         strncpy(info->resolution, result, sizeof(info->resolution) - 1);
         info->resolution[sizeof(info->resolution) - 1] = '\0';

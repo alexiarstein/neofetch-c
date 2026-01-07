@@ -373,14 +373,19 @@ int load_ascii_art(const char *distro_name, ascii_art_t *art) {
     
     map_distro_to_ascii_file(distro_name, filename, sizeof(filename));
     
-    // Try to construct the full path to the ASCII file
-    snprintf(filepath, sizeof(filepath), "./ascii/%s", filename);
+    FILE *file = NULL;
+    const char *search_paths[] = {
+        "/usr/share/neofetch/ascii/%s",
+        "/usr/local/share/neofetch/ascii/%s",
+        "./ascii/%s",
+        NULL
+    };
     
-    FILE *file = fopen(filepath, "r");
-    if (!file) {
-        // Try alternative path
-        snprintf(filepath, sizeof(filepath), "/usr/local/share/neofetch/ascii/%s", filename);
+    // Try each path in order
+    for (int i = 0; search_paths[i] != NULL; i++) {
+        snprintf(filepath, sizeof(filepath), search_paths[i], filename);
         file = fopen(filepath, "r");
+        if (file) break;
     }
     
     if (!file) {
