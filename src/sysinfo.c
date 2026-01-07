@@ -163,7 +163,7 @@ static void get_hardware_from_hostnamectl(char *vendor, size_t vendor_size, char
     }
     
     char *saveptr;
-    char *line = strtok_r(hostnamectl_output, "\n", &saveptr);
+    const char *line = strtok_r(hostnamectl_output, "\n", &saveptr);
     while (line != NULL) {
         if (strstr(line, "Hardware Vendor:") && strcmp(vendor, "Unknown") == 0) {
             extract_value_after_colon(line, vendor, vendor_size);
@@ -678,7 +678,11 @@ static void build_progress_bar(char *bar, size_t bar_size, int percentage, int b
     
     bar_pos += snprintf(bar + bar_pos, bar_size - bar_pos, "\033[36m[");
     
-    for (int i = 0; i < bar_length && bar_pos < (int)(bar_size - 1); i++) {
+    for (int i = 0; i < bar_length; i++) {
+        if (bar_pos >= (int)(bar_size - 1)) {
+            break;
+        }
+        
         const char *color;
         if (i < filled_blocks) {
             if (percentage < 60) {
