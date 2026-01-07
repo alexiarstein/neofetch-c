@@ -18,6 +18,14 @@
 
 #include "neofetch.h"
 
+// Safe string copy that guarantees null-termination
+void safe_strcpy(char *dest, const char *src, size_t dest_size) {
+    if (dest_size == 0) return;
+    size_t src_len = strnlen(src, dest_size - 1);
+    memcpy(dest, src, src_len);
+    dest[src_len] = '\0';
+}
+
 char *trim_whitespace(char *str) {
     char *end;
     
@@ -95,7 +103,7 @@ void detect_distro_name(char *distro_name, size_t size) {
         *name_end = '\0';
     }
     
-    strncpy(distro_name, name_start, size - 1);
+    safe_strcpy(distro_name, name_start, size - 1);
     distro_name[size - 1] = '\0';
     return;
     
@@ -104,27 +112,27 @@ try_lsb_release:
     // Method 2: lsb_release
     content = execute_command("lsb_release -si 2>/dev/null");
     if (content && strnlen(content, size) > 0) {
-        strncpy(distro_name, content, size - 1);
+        safe_strcpy(distro_name, content, size - 1);
         distro_name[size - 1] = '\0';
         return;
     }
     
     // Method 3: Check specific files
     if (access("/etc/arch-release", F_OK) == 0) {
-        strncpy(distro_name, "Arch Linux", size - 1);
+        safe_strcpy(distro_name, "Arch Linux", size - 1);
         return;
     }
     if (access("/etc/gentoo-release", F_OK) == 0) {
-        strncpy(distro_name, "Gentoo", size - 1);
+        safe_strcpy(distro_name, "Gentoo", size - 1);
         return;
     }
     if (access("/etc/fedora-release", F_OK) == 0) {
-        strncpy(distro_name, "Fedora", size - 1);
+        safe_strcpy(distro_name, "Fedora", size - 1);
         return;
     }
     
     // Default
-    strncpy(distro_name, "Linux", size - 1);
+    safe_strcpy(distro_name, "Linux", size - 1);
     distro_name[size - 1] = '\0';
 }
 

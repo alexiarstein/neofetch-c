@@ -108,5 +108,6 @@ char *execute_command(const char *command);
 void detect_distro_name(char *distro_name, size_t size);
 void format_memory(unsigned long bytes, char *output, size_t size);
 void format_uptime(long uptime_seconds, char *output, size_t size);
+void safe_strcpy(char *dest, const char *src, size_t dest_size);
 
 #endif /* NEOFETCH_H */

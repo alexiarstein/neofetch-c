@@ -315,7 +315,7 @@ void map_distro_to_ascii_file(const char *distro, char *filename, size_t size) {
     for (int i = 0; distro_mappings[i].distro_pattern != NULL; i++) {
         if (strcmp(normalized_distro, distro_mappings[i].distro_pattern) == 0 &&
             file_exists_in_paths(distro_mappings[i].ascii_file)) {
-            strncpy(filename, distro_mappings[i].ascii_file, size - 1);
+            safe_strcpy(filename, distro_mappings[i].ascii_file, size - 1);
             filename[size - 1] = '\0';
             return;
         }
@@ -325,7 +325,7 @@ void map_distro_to_ascii_file(const char *distro, char *filename, size_t size) {
     for (int i = 0; distro_mappings[i].distro_pattern != NULL; i++) {
         if (strstr(normalized_distro, distro_mappings[i].distro_pattern) != NULL &&
             file_exists_in_paths(distro_mappings[i].ascii_file)) {
-            strncpy(filename, distro_mappings[i].ascii_file, size - 1);
+            safe_strcpy(filename, distro_mappings[i].ascii_file, size - 1);
             filename[size - 1] = '\0';
             return;
         }
@@ -333,7 +333,7 @@ void map_distro_to_ascii_file(const char *distro, char *filename, size_t size) {
     
     // Fallback: try to construct filename directly from normalized distro name
     char fallback_name[249];  // Reduced to leave room for ".ascii" suffix (249 + 6 + 1 = 256)
-    strncpy(fallback_name, normalized_distro, sizeof(fallback_name) - 1);
+    safe_strcpy(fallback_name, normalized_distro, sizeof(fallback_name));
     fallback_name[sizeof(fallback_name) - 1] = '\0';
     
     // Replace spaces with underscores for filename
@@ -346,13 +346,13 @@ void map_distro_to_ascii_file(const char *distro, char *filename, size_t size) {
     char fallback_file[256];
     snprintf(fallback_file, sizeof(fallback_file), "%s.ascii", fallback_name);
     if (file_exists_in_paths(fallback_file)) {
-        strncpy(filename, fallback_file, size - 1);
+        safe_strcpy(filename, fallback_file, size - 1);
         filename[size - 1] = '\0';
         return;
     }
     
     // Final fallback: use a default
-    strncpy(filename, "linux.ascii", size - 1);
+    safe_strcpy(filename, "linux.ascii", size - 1);
     filename[size - 1] = '\0';
 }
     
