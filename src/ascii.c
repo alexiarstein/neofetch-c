@@ -315,23 +315,21 @@ void map_distro_to_ascii_file(const char *distro, char *filename, size_t size) {
     
     // First pass: exact matches
     for (int i = 0; distro_mappings[i].distro_pattern != NULL; i++) {
-        if (strcmp(normalized_distro, distro_mappings[i].distro_pattern) == 0) {
-            if (file_exists_in_paths(distro_mappings[i].ascii_file)) {
-                strncpy(filename, distro_mappings[i].ascii_file, size - 1);
-                filename[size - 1] = '\0';
-                return;
-            }
+        if (strcmp(normalized_distro, distro_mappings[i].distro_pattern) == 0 &&
+            file_exists_in_paths(distro_mappings[i].ascii_file)) {
+            strncpy(filename, distro_mappings[i].ascii_file, size - 1);
+            filename[size - 1] = '\0';
+            return;
         }
     }
     
     // Second pass: substring matches
     for (int i = 0; distro_mappings[i].distro_pattern != NULL; i++) {
-        if (strstr(normalized_distro, distro_mappings[i].distro_pattern) != NULL) {
-            if (file_exists_in_paths(distro_mappings[i].ascii_file)) {
-                strncpy(filename, distro_mappings[i].ascii_file, size - 1);
-                filename[size - 1] = '\0';
-                return;
-            }
+        if (strstr(normalized_distro, distro_mappings[i].distro_pattern) != NULL &&
+            file_exists_in_paths(distro_mappings[i].ascii_file)) {
+            strncpy(filename, distro_mappings[i].ascii_file, size - 1);
+            filename[size - 1] = '\0';
+            return;
         }
     }
     
