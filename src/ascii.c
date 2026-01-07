@@ -379,6 +379,96 @@ int calculate_display_width(const char *str) {
     return width;
 }
 
+// Helper function to process color placeholders in ASCII art
+static void process_color_placeholder(char **src, char **dst, const ascii_art_t *art) {
+    *src += 3; // Skip "${c"
+    
+    if (**src < '0' || **src > '7') {
+        // Invalid color code, copy as is
+        *(*dst)++ = '$';
+        *(*dst)++ = '{';
+        *(*dst)++ = 'c';
+        return;
+    }
+    
+    int color_num = **src - '0';
+    (*src)++; // Skip digit
+    
+    if (**src != '}') {
+        // Invalid format, copy as is
+        *(*dst)++ = '$';
+        *(*dst)++ = '{';
+        *(*dst)++ = 'c';
+        return;
+    }
+    
+    (*src)++; // Skip '}'
+    
+    // Add color code
+    if (color_num <= 7) {
+        strcpy(*dst, art->colors[color_num]);
+        *dst += strlen(art->colors[color_num]);
+    }
+}
+
+// Helper function to process line with color codes
+static void process_line_colors(const char *line, char *processed_line, const ascii_art_t *art) {
+    char *src = (char *)line;
+    char *dst = processed_line;
+    
+    while (*src && (dst - processed_line) < MAX_ASCII_WIDTH - 20) {
+        if (strncmp(src, "${c", 3) == 0) {
+            process_color_placeholder(&src, &dst, art);
+        } else {
+            *dst++ = *src++;
+        }
+    }
+    *dst = '\0';
+}
+
+// Helper function to setup default ASCII art
+static void setup_default_ascii(ascii_art_t *art) {
+    art->line_count = 6;
+    art->max_width = 20;
+    strcpy(art->lines[0], "      /\\      ");
+    strcpy(art->lines[1], "     /  \\     ");
+    strcpy(art->lines[2], "    /____\\    ");
+    strcpy(art->lines[3], "   /      \\   ");
+    strcpy(art->lines[4], "  /        \\  ");
+    strcpy(art->lines[5], " /__________\\ ");
+    
+    strcpy(art->colors[0], "\033[0m");   // reset
+    strcpy(art->colors[1], "\033[34m");  // blue
+    strcpy(art->colors[2], "\033[36m");  // cyan
+}
+
+// Helper function to setup color mappings
+static void setup_color_mappings(ascii_art_t *art) {
+    strcpy(art->colors[0], "\033[0m");   // reset
+    strcpy(art->colors[1], "\033[31m");  // red
+    strcpy(art->colors[2], "\033[32m");  // green  
+    strcpy(art->colors[3], "\033[33m");  // yellow
+    strcpy(art->colors[4], "\033[34m");  // blue
+    strcpy(art->colors[5], "\033[35m");  // magenta
+    strcpy(art->colors[6], "\033[36m");  // cyan
+    strcpy(art->colors[7], "\033[37m");  // white
+}
+
+// Helper function to process ASCII file line
+static int should_skip_line(const char *line, int line_count) {
+    // Skip comment lines
+    if (line[0] == '#') {
+        return 1;
+    }
+    
+    // Skip empty lines at the beginning
+    if (line_count == 0 && strlen(line) == 0) {
+        return 1;
+    }
+    
+    return 0;
+}
+
 int load_ascii_art(const char *distro_name, ascii_art_t *art) {
     char filename[64];
     char filepath[512];
@@ -401,20 +491,7 @@ int load_ascii_art(const char *distro_name, ascii_art_t *art) {
     }
     
     if (!file) {
-        // Use a simple default ASCII art
-        art->line_count = 6;
-        art->max_width = 20;
-        strcpy(art->lines[0], "      /\\      ");
-        strcpy(art->lines[1], "     /  \\     ");
-        strcpy(art->lines[2], "    /____\\    ");
-        strcpy(art->lines[3], "   /      \\   ");
-        strcpy(art->lines[4], "  /        \\  ");
-        strcpy(art->lines[5], " /__________\\ ");
-        
-        // Set default colors
-        strcpy(art->colors[0], "\033[0m");   // reset
-        strcpy(art->colors[1], "\033[34m");  // blue
-        strcpy(art->colors[2], "\033[36m");  // cyan
+        setup_default_ascii(art);
         return 0;
     }
     
@@ -422,15 +499,7 @@ int load_ascii_art(const char *distro_name, ascii_art_t *art) {
     art->max_width = 0;
     char line[MAX_ASCII_WIDTH];
     
-    // Set up color mappings - matching neofetch colors
-    strcpy(art->colors[0], "\033[0m");   // reset
-    strcpy(art->colors[1], "\033[31m");  // red
-    strcpy(art->colors[2], "\033[32m");  // green  
-    strcpy(art->colors[3], "\033[33m");  // yellow (for goldendog)
-    strcpy(art->colors[4], "\033[34m");  // blue
-    strcpy(art->colors[5], "\033[35m");  // magenta
-    strcpy(art->colors[6], "\033[36m");  // cyan
-    strcpy(art->colors[7], "\033[37m");  // white
+    setup_color_mappings(art);
     
     while (fgets(line, sizeof(line), file) && art->line_count < MAX_ASCII_LINES) {
         // Remove newline safely
@@ -439,52 +508,18 @@ int load_ascii_art(const char *distro_name, ascii_art_t *art) {
             line[len] = '\0';
         }
         
-        // Skip comment lines that start with '#'
-        if (line[0] == '#') {
+        if (should_skip_line(line, art->line_count)) {
             continue;
         }
         
-        // Skip empty lines at the beginning
-        if (art->line_count == 0 && strlen(line) == 0) {
-            continue;
-        }
-        
-        // Process color placeholders like ${c1}, ${c2}, etc.
+        // Process color placeholders
         char processed_line[MAX_ASCII_WIDTH];
-        char *src = line;
-        char *dst = processed_line;
-        
-        while (*src && (dst - processed_line) < MAX_ASCII_WIDTH - 20) {
-            if (strncmp(src, "${c", 3) == 0) {
-                src += 3; // Skip "${c"
-                if (*src >= '0' && *src <= '7') {
-                    int color_num = *src - '0';
-                    src++; // Skip digit
-                    if (*src == '}') {
-                        src++; // Skip '}'
-                        // Add color code
-                        if (color_num <= 7) {
-                            strcpy(dst, art->colors[color_num]);
-                            dst += strlen(art->colors[color_num]);
-                        }
-                        continue;
-                    }
-                }
-                // If not a valid color code, copy as is
-                *dst++ = '$';
-                *dst++ = '{';
-                *dst++ = 'c';
-            } else {
-                *dst++ = *src++;
-            }
-        }
-        *dst = '\0';
+        process_line_colors(line, processed_line, art);
         
         strcpy(art->lines[art->line_count], processed_line);
         
         // Calculate display width excluding ANSI escape sequences
         int actual_len = calculate_display_width(processed_line);
-        
         if (actual_len > art->max_width) {
             art->max_width = actual_len;
         }
@@ -496,51 +531,83 @@ int load_ascii_art(const char *distro_name, ascii_art_t *art) {
     return 1;
 }
 
-void print_info_with_ascii(const system_info_t *info, const ascii_art_t *art) {
-    // Prepare info lines - compacted to avoid empty lines
+// Helper structure for display entries
+typedef struct {
+    const char *label;
+    const char *content;
+} info_entry_t;
+
+// Helper function to check if info line should be displayed
+static int should_display_info(const char *content) {
+    return strlen(content) > 0 && strcmp(content, "Unknown") != 0;
+}
+
+// Helper function to build display entries
+static int build_display_entries(const system_info_t *info, info_entry_t *entries, int max_entries) {
     const char *info_lines[] = {
-        info->user,
-        info->distro,
-        info->architecture,
-        info->hardware,
-        info->model,
-        info->kernel,
-        info->uptime,
-        info->packages,
-        info->shell,
-        info->resolution,
-        info->de,
-        info->dm,
-        info->theme,
-        info->icons,
-        info->terminal,
-        info->cpu,
-        info->gpu,
-        info->memory  // Now includes the progress bar
+        info->user, info->distro, info->architecture, info->hardware,
+        info->model, info->kernel, info->uptime, info->packages,
+        info->shell, info->resolution, info->de, info->dm,
+        info->theme, info->icons, info->terminal, info->cpu,
+        info->gpu, info->memory
     };
     
-        const char *info_labels[] = {
-        "",                // user@hostname (special case)
-        "OS",
-        "Architecture",
-        "Host",
-        "Model",
-        "Kernel",
-        "Uptime",
-        "Packages",
-        "Shell",
-        "Resolution",
-        "DE",
-        "DM",
-        "Theme",
-        "Icons",
-        "Terminal",
-        "CPU",
-        "GPU",
-        "Memory"         // Now includes usage bar
+    const char *info_labels[] = {
+        "", "OS", "Architecture", "Host", "Model", "Kernel",
+        "Uptime", "Packages", "Shell", "Resolution", "DE", "DM",
+        "Theme", "Icons", "Terminal", "CPU", "GPU", "Memory"
     };
     
-    // Calculate proper spacing - use actual display width
+    int entry_count = 0;
+    
+    // First entry is always user@hostname
+    entries[entry_count].label = "";
+    entries[entry_count].content = info->user;
+    entry_count++;
+    
+    // Add other entries if they have valid content
+    for (int i = 1; i < 18 && entry_count < max_entries; i++) {
+        if (should_display_info(info_lines[i])) {
+            entries[entry_count].label = info_labels[i];
+            entries[entry_count].content = info_lines[i];
+            entry_count++;
+        }
+    }
+    
+    return entry_count;
+}
+
+// Helper function to print ASCII art line with padding
+static void print_ascii_line(const ascii_art_t *art, int line_idx, int padding) {
+    if (line_idx < art->line_count) {
+        printf("%s", art->lines[line_idx]);
+        int current_width = calculate_display_width(art->lines[line_idx]);
+        for (int j = current_width; j < padding; j++) {
+            printf(" ");
+        }
+    } else {
+        for (int j = 0; j < padding; j++) {
+            printf(" ");
+        }
+    }
+}
+
+// Helper function to print info line
+static void print_info_line(const system_info_t *info, const info_entry_t *entries, int line_idx) {
+    if (line_idx == 0) {
+        printf("\033[1m%s@%s\033[0m", info->user, info->hostname);
+    } else if (line_idx == 1) {
+        int title_len = strlen(info->user) + strlen(info->hostname) + 1;
+        for (int j = 0; j < title_len; j++) {
+            printf("-");
+        }
+    } else {
+        printf("\033[36m%s\033[0m: %s", entries[line_idx].label, entries[line_idx].content);
+    }
+}
+
+void print_info_with_ascii(const system_info_t *info, const ascii_art_t *art) {
+    // Calculate ASCII display width
     int ascii_display_width = 0;
     for (int i = 0; i < art->line_count; i++) {
         int line_width = calculate_display_width(art->lines[i]);
@@ -549,68 +616,21 @@ void print_info_with_ascii(const system_info_t *info, const ascii_art_t *art) {
         }
     }
     
-    // Add padding for better alignment
     int padding = ascii_display_width + 4;
     
-    // Build list of non-empty info lines to display compactly
-    typedef struct {
-        const char *label;
-        const char *content;
-    } info_entry_t;
-    
+    // Build list of entries to display
     info_entry_t display_entries[20];
-    int entry_count = 0;
-    
-    for (int i = 0; i < 19; i++) {  // Updated to include model field
-        if (i == 0) {
-            // Special case for user@hostname - always include
-            display_entries[entry_count].label = "";
-            display_entries[entry_count].content = info->user; // Will be handled specially
-            entry_count++;
-        } else {
-            int idx = i - 1;
-            if (idx < 18 && strlen(info_lines[idx]) > 0 && strcmp(info_lines[idx], "Unknown") != 0) {  // Updated bounds check
-                display_entries[entry_count].label = info_labels[idx];
-                display_entries[entry_count].content = info_lines[idx];
-                entry_count++;
-            }
-        }
-    }
+    int entry_count = build_display_entries(info, display_entries, 20);
     
     int max_lines = (art->line_count > entry_count) ? art->line_count : entry_count;
     
     for (int i = 0; i < max_lines; i++) {
-        // Print ASCII art line
-        if (i < art->line_count) {
-            printf("%s", art->lines[i]);
-            // Add padding to align info column
-            int current_width = calculate_display_width(art->lines[i]);
-            for (int j = current_width; j < padding; j++) {
-                printf(" ");
-            }
-        } else {
-            // Empty line with proper padding
-            for (int j = 0; j < padding; j++) {
-                printf(" ");
-            }
+        print_ascii_line(art, i, padding);
+        
+        if (i < entry_count) {
+            print_info_line(info, display_entries, i);
         }
         
-        // Print info line if we have one
-        if (i < entry_count) {
-            if (i == 0) {
-                // Special case for user@hostname
-                printf("\033[1m%s@%s\033[0m", info->user, info->hostname);
-            } else if (i == 1) {
-                // Print underline after user@hostname
-                int title_len = strlen(info->user) + strlen(info->hostname) + 1;
-                for (int j = 0; j < title_len; j++) {
-                    printf("-");
-                }
-            } else {
-                // Regular info line
-                printf("\033[36m%s\033[0m: %s", display_entries[i].label, display_entries[i].content);
-            }
-        }
         printf("\n");
     }
     
