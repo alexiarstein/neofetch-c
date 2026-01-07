@@ -78,8 +78,8 @@ make install
 
 Simply run the executable:
 
-```bash
-./neofetch
+```
+neofetch
 ```
 
 The application will automatically detect your system information and display it alongside the appropriate ASCII art for your distribution.
@@ -118,20 +118,22 @@ This C implementation focuses on the core functionality of the original bash neo
 - **Memory**: Lower memory footprint
 - **Features**: Implements the most commonly used features
 
-## Contributing
-
-To add support for additional distributions, package managers, or improve system detection:
-
-1. Add distribution-specific logic to `src/sysinfo.c`
-2. Add corresponding ASCII art to the `ascii/` directory
-3. Update the distribution mapping in `src/ascii.c`
-
 ## License
 
-This project maintains compatibility with the original neofetch licensing.
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+## Author
+
+**Alexia Michelle**
+- Copyright (C) 2026
 
 ## Acknowledgments
 
 - Original neofetch by Dylan Araps
-- Maintained fork by Alexia Michelle
 - ASCII art collection from the original neofetch project
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+Some ASCII art needs reworking and coloring, feel free to 

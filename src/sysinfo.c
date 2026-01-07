@@ -1,3 +1,21 @@
+/*
+ * neofetch-c - A fast system information tool written in C
+ * Copyright (C) 2026 Alexia Michelle <https://github.com/alexiarstein/neofetch-c>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include "neofetch.h"
 
 void get_user_hostname(system_info_t *info) {
@@ -185,47 +203,107 @@ void get_uptime(system_info_t *info) {
 void get_packages(system_info_t *info) {
     int total_packages = 0;
     char *result;
+    char breakdown[384] = "";
+    int breakdown_count = 0;
     
     // Check various package managers
     
     // dpkg (Debian/Ubuntu)
     result = execute_command("dpkg -l 2>/dev/null | grep '^ii' | wc -l");
-    if (result && atoi(result) > 0) {
-        total_packages += atoi(result);
+    int dpkg_count = (result && atoi(result) > 0) ? atoi(result) : 0;
+    if (dpkg_count > 0) {
+        total_packages += dpkg_count;
+        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
+                 "%s\033[36m.deb\033[0m: %d", breakdown_count > 0 ? " - " : "", dpkg_count);
+        breakdown_count++;
     }
     
     // rpm (Red Hat/Fedora)
     result = execute_command("rpm -qa 2>/dev/null | wc -l");
-    if (result && atoi(result) > 0) {
-        total_packages += atoi(result);
+    int rpm_count = (result && atoi(result) > 0) ? atoi(result) : 0;
+    if (rpm_count > 0) {
+        total_packages += rpm_count;
+        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
+                 "%s\033[36m.rpm\033[0m: %d", breakdown_count > 0 ? " - " : "", rpm_count);
+        breakdown_count++;
     }
     
     // pacman (Arch)
     result = execute_command("pacman -Q 2>/dev/null | wc -l");
-    if (result && atoi(result) > 0) {
-        total_packages += atoi(result);
+    int pacman_count = (result && atoi(result) > 0) ? atoi(result) : 0;
+    if (pacman_count > 0) {
+        total_packages += pacman_count;
+        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
+                 "%s\033[36mpacman\033[0m: %d", breakdown_count > 0 ? " - " : "", pacman_count);
+        breakdown_count++;
     }
     
     // emerge (Gentoo)
     result = execute_command("ls -d /var/db/pkg/*/* 2>/dev/null | wc -l");
-    if (result && atoi(result) > 0) {
-        total_packages += atoi(result);
+    int emerge_count = (result && atoi(result) > 0) ? atoi(result) : 0;
+    if (emerge_count > 0) {
+        total_packages += emerge_count;
+        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
+                 "%s\033[36memerge\033[0m: %d", breakdown_count > 0 ? " - " : "", emerge_count);
+        breakdown_count++;
     }
     
     // xbps (Void Linux)
     result = execute_command("xbps-query -l 2>/dev/null | wc -l");
-    if (result && atoi(result) > 0) {
-        total_packages += atoi(result);
+    int xbps_count = (result && atoi(result) > 0) ? atoi(result) : 0;
+    if (xbps_count > 0) {
+        total_packages += xbps_count;
+        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
+                 "%s\033[36mxbps\033[0m: %d", breakdown_count > 0 ? " - " : "", xbps_count);
+        breakdown_count++;
     }
     
     // apk (Alpine)
     result = execute_command("apk list --installed 2>/dev/null | wc -l");
-    if (result && atoi(result) > 0) {
-        total_packages += atoi(result);
+    int apk_count = (result && atoi(result) > 0) ? atoi(result) : 0;
+    if (apk_count > 0) {
+        total_packages += apk_count;
+        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
+                 "%s\033[36mapk\033[0m: %d", breakdown_count > 0 ? " - " : "", apk_count);
+        breakdown_count++;
+    }
+    
+    // flatpak
+    result = execute_command("flatpak list 2>/dev/null | wc -l");
+    int flatpak_count = (result && atoi(result) > 0) ? atoi(result) : 0;
+    if (flatpak_count > 0) {
+        total_packages += flatpak_count;
+        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
+                 "%s\033[36mflatpak\033[0m: %d", breakdown_count > 0 ? " - " : "", flatpak_count);
+        breakdown_count++;
+    }
+    
+    // snap
+    result = execute_command("snap list 2>/dev/null | tail -n +2 | wc -l");
+    int snap_count = (result && atoi(result) > 0) ? atoi(result) : 0;
+    if (snap_count > 0) {
+        total_packages += snap_count;
+        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
+                 "%s\033[36msnap\033[0m: %d", breakdown_count > 0 ? " - " : "", snap_count);
+        breakdown_count++;
+    }
+    
+    // brew (Homebrew)
+    result = execute_command("brew list --formula 2>/dev/null | wc -l");
+    int brew_count = (result && atoi(result) > 0) ? atoi(result) : 0;
+    if (brew_count > 0) {
+        total_packages += brew_count;
+        snprintf(breakdown + strlen(breakdown), sizeof(breakdown) - strlen(breakdown), 
+                 "%s\033[36mbrew\033[0m: %d", breakdown_count > 0 ? " - " : "", brew_count);
+        breakdown_count++;
     }
     
     if (total_packages > 0) {
-        snprintf(info->packages, sizeof(info->packages), "%d", total_packages);
+        if (breakdown_count > 0) {
+            snprintf(info->packages, sizeof(info->packages), "%d  | %s", total_packages, breakdown);
+        } else {
+            snprintf(info->packages, sizeof(info->packages), "%d", total_packages);
+        }
     } else {
         strncpy(info->packages, "Unknown", sizeof(info->packages) - 1);
     }
@@ -580,7 +658,7 @@ void get_memory(system_info_t *info) {
         // Create visual progress bar
         const int bar_length = 8;   // Shorter bar to fit in memory field
         int filled_blocks = (percentage * bar_length) / 100;
-        char progress_bar[32];  // Smaller buffer for the progress bar
+        char progress_bar[128];  // Increased buffer size for ANSI codes (8 blocks * ~9 bytes each + overhead)
         
         // Build the progress bar with color coding using ASCII characters
         strcpy(progress_bar, "\033[36m["); // Cyan opening bracket
@@ -601,7 +679,42 @@ void get_memory(system_info_t *info) {
         
         strcat(progress_bar, "\033[36m]\033[0m"); // Cyan closing bracket + reset
         
-        snprintf(info->memory, sizeof(info->memory), "%.12s/%.12s %s%d%%", used_str, total_str, progress_bar, percentage);
+        // Get CPU load average (1 minute average)
+        double loadavg[3];
+        char cpu_load_str[192] = "";
+        if (getloadavg(loadavg, 1) != -1) {
+            // Get number of CPU cores
+            long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+            if (num_cores > 0) {
+                // Calculate CPU load percentage based on 1-minute load average
+                int cpu_percentage = (int)((loadavg[0] / num_cores) * 100.0);
+                if (cpu_percentage > 100) cpu_percentage = 100; // Cap at 100%
+                
+                // Create CPU load bar (exact size: opening + 8 blocks + closing)
+                int cpu_filled = (cpu_percentage * bar_length) / 100;
+                char cpu_bar[96];  // Sufficient for progress bar with ANSI codes
+                strcpy(cpu_bar, "\033[36m[");
+                
+                for (int i = 0; i < bar_length; i++) {
+                    if (i < cpu_filled) {
+                        if (cpu_percentage < 60) {
+                            strcat(cpu_bar, "\033[32m#"); // Green for low usage
+                        } else if (cpu_percentage < 80) {
+                            strcat(cpu_bar, "\033[33m#"); // Yellow for medium usage  
+                        } else {
+                            strcat(cpu_bar, "\033[31m#"); // Red for high usage
+                        }
+                    } else {
+                        strcat(cpu_bar, "\033[90m-"); // Dark gray for empty
+                    }
+                }
+                
+                strcat(cpu_bar, "\033[36m]\033[0m");
+                snprintf(cpu_load_str, sizeof(cpu_load_str), " | \033[36mCPU Load\033[0m: %s%d%%", cpu_bar, cpu_percentage);
+            }
+        }
+        
+        snprintf(info->memory, sizeof(info->memory), "%.12s/%.12s %s%d%%%s", used_str, total_str, progress_bar, percentage, cpu_load_str);
         strcpy(info->memory_bar, ""); // Clear since we combined it
     } else {
         strncpy(info->memory, "Unknown", sizeof(info->memory) - 1);

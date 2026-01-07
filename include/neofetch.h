@@ -1,3 +1,21 @@
+/*
+ * neofetch-c - A fast system information tool written in C
+ * Copyright (C) 2026 Alexia Michelle https://github.com/alexiarstein/neofetch-c
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #ifndef NEOFETCH_H
 #define NEOFETCH_H
 
@@ -28,7 +46,7 @@ typedef struct {
     char hardware[256];
     char kernel[128];
     char uptime[64];
-    char packages[64];
+    char packages[512];    // Increased to fit package manager breakdown with ANSI colors
     char shell[128];
     char resolution[64];
     char de[64];
@@ -41,7 +59,7 @@ typedef struct {
     char term_font[64];
     char cpu[256];
     char gpu[256];
-    char memory[256];      // Increased to fit progress bar with ANSI colors
+    char memory[384];      // Increased to fit progress bar + CPU load with ANSI colors
     char memory_bar[128];
     char model[128];
 } system_info_t;

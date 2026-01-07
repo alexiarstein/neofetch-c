@@ -1,5 +1,15 @@
+# neofetch-c - A fast system information tool written in C
+# Copyright (C) 2026 Alexia Michelle <https://github.com/alexiarstein/neofetch-c>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11 -D_GNU_SOURCE -Iinclude
+HARDENING_CFLAGS = -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wformat -Werror=format-security -fPIE
+LDFLAGS = -Wl,-z,relro -Wl,-z,now -pie
 SRCDIR = src
 OBJDIR = build
 INCDIR = include
@@ -13,10 +23,10 @@ OBJECTS = $(SOURCES:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
 all: $(TARGET)
 
 $(TARGET): $(OBJECTS) | $(OBJDIR)
-	$(CC) $(OBJECTS) -o $@
+	$(CC) $(OBJECTS) $(LDFLAGS) -o $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(HARDENING_CFLAGS) -c $< -o $@
 
 $(OBJDIR):
 	mkdir -p $(OBJDIR)

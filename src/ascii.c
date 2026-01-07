@@ -1,19 +1,31 @@
+/*
+ * neofetch-c - A fast system information tool written in C
+ * Copyright (C) 2026 Alexia Michelle <https://github.com/alexiarstein/neofetch-c>
+ * 
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include "neofetch.h"
 #include <ctype.h>
 #include <dirent.h>
 #include <sys/stat.h>
 
-// ANSI color codes (removed static array - colors now defined in load_ascii_art)
-
-// Structure for distro mapping
 typedef struct {
     const char *distro_pattern;
     const char *ascii_file;
 } distro_mapping_t;
-
-// Distro mappings with patterns and their corresponding ASCII files
 static const distro_mapping_t distro_mappings[] = {
-    // Exact matches first (highest priority)
     {"aix", "aix.ascii"},
     {"almalinux", "almalinux.ascii"},
     {"alma", "almalinux.ascii"},
