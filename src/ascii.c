@@ -435,8 +435,11 @@ int load_ascii_art(const char *distro_name, ascii_art_t *art) {
     strcpy(art->colors[7], "\033[37m");  // white
     
     while (fgets(line, sizeof(line), file) && art->line_count < MAX_ASCII_LINES) {
-        // Remove newline
-        line[strcspn(line, "\n")] = '\0';
+        // Remove newline safely
+        size_t len = strcspn(line, "\n");
+        if (len < sizeof(line)) {
+            line[len] = '\0';
+        }
         
         // Skip comment lines that start with '#'
         if (line[0] == '#') {
