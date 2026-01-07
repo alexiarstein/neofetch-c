@@ -276,7 +276,7 @@ static const distro_mapping_t distro_mappings[] = {
     {"xubuntu", "xubuntu.ascii"},
     {"xferience", "xferience.ascii"},
     {"zorin", "zorin.ascii"},
-    {NULL, NULL} // End marker
+    {NULL, NULL} 
 };
 
 static void normalize_string(const char *input, char *output, size_t size) {
@@ -298,6 +298,10 @@ static void normalize_string(const char *input, char *output, size_t size) {
 static int file_exists_in_paths(const char *filename) {
     char filepath[512];
     struct stat st;
+    //NEW: Paths. Installed neofetch-c will deploy ascii/ in /usr/share/neofetch/ascii
+    // if we cant find it there, we check local,
+    // otherwise we fall back to the relative path, for debugging, development, etc
+    // (to avoid sudo make install during testing, mostly.) -- Alexia
     
     const char *search_dirs[] = {
         "/usr/share/neofetch/ascii",

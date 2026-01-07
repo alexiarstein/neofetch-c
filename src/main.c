@@ -22,7 +22,6 @@ int main(int argc __attribute__((unused)), char *argv[] __attribute__((unused)))
     system_info_t info = {0};
     ascii_art_t art = {0};
     
-    // Gather all system information
     get_user_hostname(&info);
     get_distro(&info);
     get_architecture(&info);
@@ -42,11 +41,9 @@ int main(int argc __attribute__((unused)), char *argv[] __attribute__((unused)))
     get_cpu(&info);
     get_gpu(&info);
     get_memory(&info);
-    
-    // Load ASCII art based on distro
+
+    // load the ascii art to print the info with it.
     load_ascii_art(info.distro, &art);
-    
-    // Print the information with ASCII art
     print_info_with_ascii(&info, &art);
     
     return 0;

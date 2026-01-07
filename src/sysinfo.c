@@ -21,17 +21,14 @@
 #include <stdbool.h>
 #include <stdarg.h>
 
-// Forward declarations for internal helper functions
 static void build_progress_bar(char *bar, size_t bar_size, int percentage, int bar_length);
 static void get_cpu_load_string(char *cpu_load_str, size_t str_size, int bar_length);
 
-// Helper function to safely set string with null termination
 static void safe_set_string(char *dest, const char *src, size_t dest_size) {
     safe_strcpy(dest, src, dest_size);
     dest[dest_size - 1] = '\0';
 }
 
-// Helper function to check environment variable and set if found
 static bool try_env_and_set(const char *env_var, char *dest, size_t dest_size) {
     const char *value = getenv(env_var);
     if (value && strnlen(value, dest_size) > 0) {
@@ -41,7 +38,6 @@ static bool try_env_and_set(const char *env_var, char *dest, size_t dest_size) {
     return false;
 }
 
-// Helper function to format window manager names consistently
 static void format_wm_name(const char *raw_name, char *dest, size_t dest_size) {
     if (strcmp(raw_name, "kwin") == 0 || strcmp(raw_name, "kwin_x11") == 0) {
         safe_set_string(dest, "KWin", dest_size);
@@ -58,7 +54,6 @@ static void format_wm_name(const char *raw_name, char *dest, size_t dest_size) {
     } else if (strcmp(raw_name, "awesome") == 0) {
         safe_set_string(dest, "Awesome", dest_size);
     } else {
-        // Capitalize first letter for other WMs
         char formatted_name[64];
         safe_strcpy(formatted_name, raw_name, sizeof(formatted_name));
         formatted_name[0] = toupper(formatted_name[0]);
@@ -66,7 +61,6 @@ static void format_wm_name(const char *raw_name, char *dest, size_t dest_size) {
     }
 }
 
-// Helper function to execute command and try to set result
 static bool try_command_and_set(const char *command, char *dest, size_t dest_size) {
     const char *result = execute_command(command);
     if (result && strnlen(result, dest_size) > 0) {
@@ -76,7 +70,6 @@ static bool try_command_and_set(const char *command, char *dest, size_t dest_siz
     return false;
 }
 
-// Helper function to check if process is running
 static bool is_process_running(const char *process_name) {
     char command[256];
     snprintf(command, sizeof(command), "pgrep -x %s >/dev/null 2>&1; echo $?", process_name);
@@ -84,7 +77,6 @@ static bool is_process_running(const char *process_name) {
     return (result && atoi(result) == 0);
 }
 
-// Helper function for setting WM based on process check
 static bool try_wm_process_check(const char *process_name, const char *wm_name, char *dest, size_t dest_size) {
     if (is_process_running(process_name)) {
         safe_set_string(dest, wm_name, dest_size);
@@ -174,7 +166,6 @@ static void set_distro_from_os_release(system_info_t *info, const char *pretty_n
     safe_set_string(info->distro, "Linux", sizeof(info->distro));
 }
 
-// refactored this to make it thread-safe.
 void get_user_hostname(system_info_t *info) {
     struct passwd pwd = {0};
     struct passwd *result = NULL;
@@ -222,7 +213,6 @@ void get_distro(system_info_t *info) {
         return;
     }
     
-    // If all else fails, we display it as "Linux" (not ideal but good enough for now)
     safe_set_string(info->distro, "Linux", sizeof(info->distro));
 }
 
@@ -230,8 +220,7 @@ void get_architecture(system_info_t *info) {
     char *output = execute_command("uname -m");
     if (output && strnlen(output, sizeof(info->architecture)) > 0) {
         output[strcspn(output, "\n")] = '\0';
-        
-        // 'beautifying' arch outputs to something more human-friendly
+
         if (strcmp(output, "x86_64") == 0) {
             safe_set_string(info->architecture, "x86-64", sizeof(info->architecture));
         } else if (strcmp(output, "i386") == 0 || strcmp(output, "i686") == 0) {
@@ -248,12 +237,10 @@ void get_architecture(system_info_t *info) {
     }
 }
 
-// Helper function to check if string is valid (not empty, not placeholder)
 static int is_valid_hardware_string(const char *str) {
     return str && strnlen(str, 256) > 0 && strcmp(str, "To be filled by O.E.M.") != 0;
 }
 
-// Helper function to safely copy hardware info
 static void copy_hardware_info(char *dest, size_t dest_size, const char *src) {
     if (is_valid_hardware_string(src)) {
         safe_strcpy(dest, src, dest_size - 1);
@@ -285,7 +272,7 @@ static void get_hardware_from_dmi(char *vendor, size_t vendor_size, char *model,
 
 static void get_hardware_from_hostnamectl(char *vendor, size_t vendor_size, char *model, size_t model_size) {
     if (strcmp(vendor, "Unknown") != 0 && strcmp(model, "Unknown") != 0) {
-        return; // Already have both values
+        return;
     }
     
     char *hostnamectl_output = execute_command("hostnamectl 2>/dev/null | grep -E 'Hardware (Vendor|Model)' | head -2");
@@ -313,7 +300,6 @@ void get_hardware(system_info_t *info) {
     get_hardware_from_dmi(vendor, sizeof(vendor), model, sizeof(model));
     get_hardware_from_hostnamectl(vendor, sizeof(vendor), model, sizeof(model));
     
-    // Storing results using the new function safe_strcpy to avoid involuntary overflows
     safe_set_string(info->hardware, vendor, sizeof(info->hardware));
     safe_set_string(info->model, model, sizeof(info->model));
 }
@@ -321,7 +307,6 @@ void get_hardware(system_info_t *info) {
 void get_kernel(system_info_t *info) {
     struct utsname uts;
     if (uname(&uts) == 0) {
-        // Truncate to fit in buffer
         snprintf(info->kernel, sizeof(info->kernel), "%.60s %.60s", uts.sysname, uts.release);
         info->kernel[sizeof(info->kernel) - 1] = '\0';
     } else {
@@ -358,7 +343,6 @@ void get_packages(system_info_t *info) {
     char breakdown[384] = "";
     int breakdown_count = 0;
     
-    // Check various package managers
     int dpkg_count = count_packages("dpkg -l 2>/dev/null | grep '^ii' | wc -l");
     int rpm_count = count_packages("rpm -qa 2>/dev/null | wc -l");
     int pacman_count = count_packages("pacman -Q 2>/dev/null | wc -l");
@@ -369,7 +353,6 @@ void get_packages(system_info_t *info) {
     int snap_count = count_packages("snap list 2>/dev/null | tail -n +2 | wc -l");
     int brew_count = count_packages("brew list --formula 2>/dev/null | wc -l");
     
-    // Add to breakdown and total
     total_packages += dpkg_count;
     add_package_breakdown(breakdown, sizeof(breakdown), &breakdown_count, ".deb", dpkg_count);
     
@@ -414,7 +397,7 @@ void get_shell(system_info_t *info) {
     if (shell) {
         char *shell_name = strrchr(shell, '/');
         if (shell_name) {
-            shell_name++; // Skip the '/'
+            shell_name++;
             
             char *version_result = NULL;
             
@@ -511,7 +494,6 @@ static void format_de_version(const char *version_cmd, const char *fallback,
     }
 }
 
-// Helper function to get version information for specific DEs
 static void get_de_version(const char *de_with_display, char *version_info, size_t size) {
     if (strstr(de_with_display, "KDE") || strstr(de_with_display, "plasma")) {
         format_de_version("plasmashell --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+'",
@@ -544,7 +526,6 @@ static void format_de_with_session_and_wm(system_info_t *info, const char *versi
         safe_strcpy(session_type, "X11", sizeof(session_type));
     }
     
-    // Format the comprehensive DE line
     if (strnlen(version_info, sizeof(info->de)) > 0 && strcmp(version_info, "Unknown") != 0) {
         if (strnlen(info->wm, sizeof(info->wm)) > 0 && strcmp(info->wm, "Unknown") != 0) {
             snprintf(info->de, sizeof(info->de), "%.30s | \033[1;36mSession\033[0m: %s | \033[1;36mWM\033[0m: %s", 
@@ -569,7 +550,6 @@ void get_desktop_environment(system_info_t *info) {
     char de_with_display[128] = {0};
     char version_info[64] = {0};
     
-    // First get window manager info (needed for the combined display)
     get_window_manager(info);
     
     detect_de_name(de_with_display, sizeof(de_with_display));
@@ -577,7 +557,6 @@ void get_desktop_environment(system_info_t *info) {
     format_de_with_session_and_wm(info, version_info);
 }
 
-// Helper function to map display manager to canonical name
 static const char* get_dm_name(const char *dm_str) {
     if (strstr(dm_str, "gdm")) return "GDM";
     if (strstr(dm_str, "sddm")) return "SDDM";
@@ -593,7 +572,6 @@ static const char* get_dm_name(const char *dm_str) {
 void get_display_manager(system_info_t *info) {
     const char *dm_result = NULL;
     
-    // Method 1: Check systemd for active display manager
     dm_result = execute_command("systemctl list-units --type=service --state=active | grep -E '(gdm|sddm|lightdm|xdm|kdm|mdm|lxdm|slim)' | head -1 | awk '{print $1}' | sed 's/\\.service$//'");
     if (dm_result && strnlen(dm_result, sizeof(info->dm)) > 0) {
         safe_strcpy(info->dm, get_dm_name(dm_result), sizeof(info->dm));
@@ -601,7 +579,6 @@ void get_display_manager(system_info_t *info) {
         return;
     }
     
-    // Method 2: Check running processes
     dm_result = execute_command("ps -eo comm | grep -E '^(gdm|gdm3|sddm|lightdm|xdm|kdm|mdm|lxdm|slim)$' | head -1");
     if (dm_result && strnlen(dm_result, sizeof(info->dm)) > 0) {
         safe_strcpy(info->dm, get_dm_name(dm_result), sizeof(info->dm));
@@ -609,7 +586,6 @@ void get_display_manager(system_info_t *info) {
         return;
     }
     
-    // Method 3: Check for display manager configuration files
     if (access("/etc/gdm/gdm.conf", F_OK) == 0 || access("/etc/gdm3/daemon.conf", F_OK) == 0) {
         safe_strcpy(info->dm, "GDM", sizeof(info->dm));
     } else if (access("/etc/sddm.conf", F_OK) == 0 || access("/etc/sddm/sddm.conf", F_OK) == 0) {
@@ -626,7 +602,6 @@ void get_display_manager(system_info_t *info) {
 void get_window_manager(system_info_t *info) {
     const char *result;
     
-    // Method 1: Try wmctrl first (most reliable when available)
     result = execute_command("wmctrl -m 2>/dev/null | grep 'Name:' | cut -d' ' -f2-");
     if (result && strnlen(result, sizeof(info->wm)) > 0) {
         safe_strcpy(info->wm, result, sizeof(info->wm));
@@ -634,7 +609,6 @@ void get_window_manager(system_info_t *info) {
         return;
     }
     
-    // Method 2: Check for Wayland compositors
     if (getenv("WAYLAND_DISPLAY")) {
         if (getenv("SWAYSOCK") || try_wm_process_check("sway", "Sway", info->wm, sizeof(info->wm))) {
             return;
@@ -646,14 +620,12 @@ void get_window_manager(system_info_t *info) {
             safe_set_string(info->wm, "Unknown", sizeof(info->wm));
         }
     } else {
-        // Method 3: Check for X11 window managers via process detection
         result = execute_command("ps aux | grep -E '(kwin|mutter|xfwm|openbox|i3|bspwm|awesome|dwm|fluxbox|jwm|herbstluftwm|qtile|xmonad|spectrwm)' | grep -v grep | head -1 | awk '{print $11}' | xargs basename");
         if (result && strnlen(result, sizeof(info->wm)) > 0) {
             format_wm_name(result, info->wm, sizeof(info->wm));
             return;
         }
         
-        // Method 4: Fall back to checking specific processes individually
         if (execute_command("pgrep -x i3 >/dev/null 2>&1; echo $?") && 
             atoi(execute_command("pgrep -x i3 >/dev/null 2>&1; echo $?")) == 0) {
             safe_strcpy(info->wm, "i3", sizeof(info->wm));
@@ -669,14 +641,12 @@ void get_window_manager(system_info_t *info) {
 }
 
 void get_wm_theme(system_info_t *info) {
-    // This is quite complex and varies by WM/DE
     safe_set_string(info->wm_theme, "Unknown", sizeof(info->wm_theme));
 }
 
 void get_theme(system_info_t *info) {
     char *result;
-    
-    // Try gsettings for GTK theme
+
     result = execute_command("gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d \"'\"");
     if (result && strnlen(result, sizeof(info->theme)) > 0 && strcmp(result, "''") != 0) {
         safe_set_string(info->theme, result, sizeof(info->theme));
@@ -688,8 +658,7 @@ void get_theme(system_info_t *info) {
 
 void get_icons(system_info_t *info) {
     char *result;
-    
-    // Try gsettings for icon theme
+
     result = execute_command("gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null | tr -d \"'\"");
     if (result && strnlen(result, sizeof(info->icons)) > 0 && strcmp(result, "''") != 0) {
         safe_set_string(info->icons, result, sizeof(info->icons));
@@ -709,7 +678,6 @@ void get_terminal(system_info_t *info) {
     } else if (colorterm) {
         safe_strcpy(info->terminal, colorterm, sizeof(info->terminal));
     } else if (term) {
-        // Remove common suffixes to get cleaner names
         if (strstr(term, "xterm-256color")) {
             safe_strcpy(info->terminal, "xterm", sizeof(info->terminal));
         } else if (strstr(term, "screen")) {
@@ -740,13 +708,12 @@ static void get_cpu_load_string(char *cpu_load_str, size_t str_size, int bar_len
     int cpu_percentage = (int)((loadavg[0] / num_cores) * 100.0);
     if (cpu_percentage > 100) cpu_percentage = 100;
     
-    char cpu_bar[128];  // Increased size to accommodate ANSI codes
+    char cpu_bar[128];
     build_progress_bar(cpu_bar, sizeof(cpu_bar), cpu_percentage, bar_length);
     snprintf(cpu_load_str, str_size, " | \033[1;36mCPU Load\033[0m: %s %d%%", cpu_bar, cpu_percentage);
 }
 
 void get_terminal_font(system_info_t *info) {
-    // This varies greatly by terminal emulator
     safe_set_string(info->term_font, "Unknown", sizeof(info->term_font));
 }
 
@@ -777,7 +744,7 @@ void get_cpu(system_info_t *info) {
     char cpu_load_str[128] = "";  
     const int bar_length = 8;
     get_cpu_load_string(cpu_load_str, sizeof(cpu_load_str), bar_length);
-    int cpu_name_len = strnlen(cpu_name, sizeof(info->cpu) - 60);  // Leave space for load info
+    int cpu_name_len = strnlen(cpu_name, sizeof(info->cpu) - 60);
     snprintf(info->cpu, sizeof(info->cpu), "%.*s%s", cpu_name_len, cpu_name, cpu_load_str);
     info->cpu[sizeof(info->cpu) - 1] = '\0';
 }
@@ -785,14 +752,12 @@ void get_cpu(system_info_t *info) {
 void get_gpu(system_info_t *info) {
     const char *result;
     
-    // Try lspci
     result = execute_command("lspci | grep -i vga | head -1 | cut -d: -f3");
     if (result && strnlen(result, sizeof(info->gpu)) > 0) {
         safe_set_string(info->gpu, result, sizeof(info->gpu));
         return;
     }
     
-    // Try nvidia-smi
     result = execute_command("nvidia-smi --query-gpu=name --format=csv,noheader,nounits 2>/dev/null | head -1");
     if (result && strnlen(result, sizeof(info->gpu)) > 0) {
         safe_set_string(info->gpu, result, sizeof(info->gpu));
@@ -812,14 +777,14 @@ static void build_progress_bar(char *bar, size_t bar_size, int percentage, int b
         const char *color = NULL;
         if (i < filled_blocks) {
             if (percentage < 60) {
-                color = "\033[32m#";  // Green
+                color = "\033[32m#";
             } else if (percentage < 80) {
-                color = "\033[33m#";  // Yellow
+                color = "\033[33m#";
             } else {
-                color = "\033[31m#";  // Red
+                color = "\033[31m#";
             }
         } else {
-            color = "\033[90m-";  // Dark gray
+            color = "\033[90m-";
         }
         pos = append_fmt(bar, bar_size, pos, "%s", color);
         if (pos >= bar_size - 1) break;
