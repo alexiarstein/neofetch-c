@@ -291,15 +291,15 @@ static int file_exists_in_paths(const char *filename) {
     char filepath[512];
     struct stat st;
     
-    const char *search_paths[] = {
-        "/usr/share/neofetch/ascii/%s",
-        "/usr/local/share/neofetch/ascii/%s",
-        "./ascii/%s",
+    const char *search_dirs[] = {
+        "/usr/share/neofetch/ascii",
+        "/usr/local/share/neofetch/ascii",
+        "./ascii",
         NULL
     };
     
-    for (int i = 0; search_paths[i] != NULL; i++) {
-        snprintf(filepath, sizeof(filepath), search_paths[i], filename);
+    for (int i = 0; search_dirs[i] != NULL; i++) {
+        snprintf(filepath, sizeof(filepath), "%s/%s", search_dirs[i], filename);
         if (stat(filepath, &st) == 0 && S_ISREG(st.st_mode)) {
             return 1;
         }
@@ -388,16 +388,16 @@ int load_ascii_art(const char *distro_name, ascii_art_t *art) {
     map_distro_to_ascii_file(distro_name, filename, sizeof(filename));
     
     FILE *file = NULL;
-    const char *search_paths[] = {
-        "/usr/share/neofetch/ascii/%s",
-        "/usr/local/share/neofetch/ascii/%s",
-        "./ascii/%s",
+    const char *search_dirs[] = {
+        "/usr/share/neofetch/ascii",
+        "/usr/local/share/neofetch/ascii",
+        "./ascii",
         NULL
     };
     
     // Try each path in order
-    for (int i = 0; search_paths[i] != NULL; i++) {
-        snprintf(filepath, sizeof(filepath), search_paths[i], filename);
+    for (int i = 0; search_dirs[i] != NULL; i++) {
+        snprintf(filepath, sizeof(filepath), "%s/%s", search_dirs[i], filename);
         file = fopen(filepath, "r");
         if (file) break;
     }
