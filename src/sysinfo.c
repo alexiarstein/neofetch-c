@@ -19,10 +19,13 @@
 #include "neofetch.h"
 
 void get_user_hostname(system_info_t *info) {
-    // Get username
-    struct passwd *pw = getpwuid(getuid());
-    if (pw) {
-        strncpy(info->user, pw->pw_name, sizeof(info->user) - 1);
+    // Get username using thread-safe version
+    struct passwd pwd;
+    struct passwd *result;
+    char buf[1024];
+    
+    if (getpwuid_r(getuid(), &pwd, buf, sizeof(buf), &result) == 0 && result != NULL) {
+        strncpy(info->user, pwd.pw_name, sizeof(info->user) - 1);
         info->user[sizeof(info->user) - 1] = '\0';
     } else {
         strncpy(info->user, "unknown", sizeof(info->user) - 1);
@@ -74,7 +77,7 @@ void get_distro(system_info_t *info) {
     }
     
     // Fallback: try lsb_release
-    char *result = execute_command("lsb_release -d 2>/dev/null | cut -f2");
+    const char *result = execute_command("lsb_release -d 2>/dev/null | cut -f2");
     if (result && strlen(result) > 0) {
         strncpy(info->distro, result, sizeof(info->distro) - 1);
         info->distro[sizeof(info->distro) - 1] = '\0';
@@ -110,73 +113,81 @@ void get_architecture(system_info_t *info) {
     }
 }
 
+// Helper function to check if string is valid (not empty, not placeholder)
+static int is_valid_hardware_string(const char *str) {
+    return str && strlen(str) > 0 && strcmp(str, "To be filled by O.E.M.") != 0;
+}
+
+// Helper function to safely copy hardware info
+static void copy_hardware_info(char *dest, size_t dest_size, const char *src) {
+    if (is_valid_hardware_string(src)) {
+        strncpy(dest, src, dest_size - 1);
+        dest[dest_size - 1] = '\0';
+    }
+}
+
+// Helper function to extract value after colon
+static void extract_value_after_colon(const char *line, char *dest, size_t dest_size) {
+    const char *value_start = strstr(line, ":");
+    if (value_start) {
+        value_start++;
+        while (*value_start == ' ') value_start++;
+        strncpy(dest, value_start, dest_size - 1);
+        dest[dest_size - 1] = '\0';
+    }
+}
+
+// Helper function to try getting hardware info from DMI
+static void get_hardware_from_dmi(char *vendor, size_t vendor_size, char *model, size_t model_size) {
+    const char *vendor_output = execute_command("cat /sys/class/dmi/id/sys_vendor 2>/dev/null || cat /sys/class/dmi/id/board_vendor 2>/dev/null");
+    if (vendor_output) {
+        copy_hardware_info(vendor, vendor_size, vendor_output);
+    }
+    
+    const char *model_output = execute_command("cat /sys/class/dmi/id/product_name 2>/dev/null || cat /sys/class/dmi/id/board_name 2>/dev/null");
+    if (model_output) {
+        copy_hardware_info(model, model_size, model_output);
+    }
+}
+
+// Helper function to try getting hardware info from hostnamectl
+static void get_hardware_from_hostnamectl(char *vendor, size_t vendor_size, char *model, size_t model_size) {
+    if (strcmp(vendor, "Unknown") != 0 && strcmp(model, "Unknown") != 0) {
+        return; // Already have both values
+    }
+    
+    char *hostnamectl_output = execute_command("hostnamectl 2>/dev/null | grep -E 'Hardware (Vendor|Model)' | head -2");
+    if (!hostnamectl_output || strlen(hostnamectl_output) == 0) {
+        return;
+    }
+    
+    char *line = strtok(hostnamectl_output, "\n");
+    while (line != NULL) {
+        if (strstr(line, "Hardware Vendor:") && strcmp(vendor, "Unknown") == 0) {
+            extract_value_after_colon(line, vendor, vendor_size);
+        } else if (strstr(line, "Hardware Model:") && strcmp(model, "Unknown") == 0) {
+            extract_value_after_colon(line, model, model_size);
+        }
+        line = strtok(NULL, "\n");
+    }
+}
+
 void get_hardware(system_info_t *info) {
     char vendor[128] = "Unknown";
     char model[128] = "Unknown";
     
-    // Try to get vendor from DMI
-    char *vendor_output = execute_command("cat /sys/class/dmi/id/sys_vendor 2>/dev/null || cat /sys/class/dmi/id/board_vendor 2>/dev/null");
-    if (vendor_output && strlen(vendor_output) > 0) {
-        vendor_output[strcspn(vendor_output, "\n")] = '\0';
-        if (strlen(vendor_output) > 0 && strcmp(vendor_output, "To be filled by O.E.M.") != 0) {
-            strncpy(vendor, vendor_output, sizeof(vendor) - 1);
-            vendor[sizeof(vendor) - 1] = '\0';
-        }
-    }
+    // Try DMI first
+    get_hardware_from_dmi(vendor, sizeof(vendor), model, sizeof(model));
     
-    // Try to get model from DMI
-    char *model_output = execute_command("cat /sys/class/dmi/id/product_name 2>/dev/null || cat /sys/class/dmi/id/board_name 2>/dev/null");
-    if (model_output && strlen(model_output) > 0) {
-        model_output[strcspn(model_output, "\n")] = '\0';
-        if (strlen(model_output) > 0 && strcmp(model_output, "To be filled by O.E.M.") != 0) {
-            strncpy(model, model_output, sizeof(model) - 1);
-            model[sizeof(model) - 1] = '\0';
-        }
-    }
+    // Try hostnamectl as fallback
+    get_hardware_from_hostnamectl(vendor, sizeof(vendor), model, sizeof(model));
     
-    // If DMI didn't work, try hostnamectl as fallback
-    if (strcmp(vendor, "Unknown") == 0 || strcmp(model, "Unknown") == 0) {
-        char *hostnamectl_output = execute_command("hostnamectl 2>/dev/null | grep -E 'Hardware (Vendor|Model)' | head -2");
-        if (hostnamectl_output && strlen(hostnamectl_output) > 0) {
-            char *line = strtok(hostnamectl_output, "\n");
-            while (line != NULL) {
-                if (strstr(line, "Hardware Vendor:") && strcmp(vendor, "Unknown") == 0) {
-                    char *vendor_start = strstr(line, ":");
-                    if (vendor_start) {
-                        vendor_start++;
-                        while (*vendor_start == ' ') vendor_start++; // Skip spaces
-                        strncpy(vendor, vendor_start, sizeof(vendor) - 1);
-                        vendor[sizeof(vendor) - 1] = '\0';
-                    }
-                } else if (strstr(line, "Hardware Model:") && strcmp(model, "Unknown") == 0) {
-                    char *model_start = strstr(line, ":");
-                    if (model_start) {
-                        model_start++;
-                        while (*model_start == ' ') model_start++; // Skip spaces
-                        strncpy(model, model_start, sizeof(model) - 1);
-                        model[sizeof(model) - 1] = '\0';
-                    }
-                }
-                line = strtok(NULL, "\n");
-            }
-        }
-    }
+    // Store results
+    strncpy(info->hardware, vendor, sizeof(info->hardware) - 1);
+    info->hardware[sizeof(info->hardware) - 1] = '\0';
     
-    // Format the hardware string for Host field (vendor only)
-    if (strcmp(vendor, "Unknown") != 0) {
-        strncpy(info->hardware, vendor, sizeof(info->hardware) - 1);
-        info->hardware[sizeof(info->hardware) - 1] = '\0';
-    } else {
-        strcpy(info->hardware, "Unknown");
-    }
-    
-    // Format the model string separately
-    if (strcmp(model, "Unknown") != 0) {
-        strncpy(info->model, model, sizeof(info->model) - 1);
-        info->model[sizeof(info->model) - 1] = '\0';
-    } else {
-        strcpy(info->model, "Unknown");
-    }
+    strncpy(info->model, model, sizeof(info->model) - 1);
+    info->model[sizeof(info->model) - 1] = '\0';
 }
 
 void get_kernel(system_info_t *info) {
