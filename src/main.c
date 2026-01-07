@@ -34,7 +34,6 @@ int main(int argc __attribute__((unused)), char *argv[] __attribute__((unused)))
     get_resolution(&info);
     get_desktop_environment(&info);
     get_display_manager(&info);
-    get_window_manager(&info);
     get_wm_theme(&info);
     get_theme(&info);
     get_icons(&info);

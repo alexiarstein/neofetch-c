@@ -48,8 +48,8 @@ typedef struct {
     char uptime[64];
     char packages[512];    // Increased to fit package manager breakdown with ANSI colors
     char shell[128];
-    char resolution[128];  // Increased to fit multiple monitor resolutions
-    char de[64];
+    char resolution[64];
+    char de[256];      // Increased size for DE | Session | WM format with ANSI colors
     char dm[64];  // Display Manager
     char wm[64];
     char wm_theme[64];

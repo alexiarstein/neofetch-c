@@ -17,6 +17,7 @@
  */
 
 #include "neofetch.h"
+#include <ctype.h>
 
 void get_user_hostname(system_info_t *info) {
     // Get username using thread-safe version
@@ -442,22 +443,34 @@ static void get_de_version(const char *de_with_display, char *version_info, size
 }
 
 // Helper function to format DE with display server
-static void format_de_with_server(system_info_t *info, const char *version_info) {
+static void format_de_with_session_and_wm(system_info_t *info, const char *version_info) {
+    char session_type[16] = "Unknown";
+    
+    // Determine session type
     if (getenv("WAYLAND_DISPLAY")) {
-        if (strnlen(version_info, sizeof(info->de)) > 0 && strcmp(version_info, "Unknown") != 0) {
-            snprintf(info->de, sizeof(info->de), "%.50s (Wayland)", version_info);
-        } else {
-            safe_strcpy(info->de, "Wayland", sizeof(info->de));
-        }
+        safe_strcpy(session_type, "Wayland", sizeof(session_type));
     } else if (getenv("DISPLAY")) {
-        if (strnlen(version_info, sizeof(info->de)) > 0 && strcmp(version_info, "Unknown") != 0) {
-            snprintf(info->de, sizeof(info->de), "%.50s (X11)", version_info);
+        safe_strcpy(session_type, "X11", sizeof(session_type));
+    }
+    
+    // Format the comprehensive DE line
+    if (strnlen(version_info, sizeof(info->de)) > 0 && strcmp(version_info, "Unknown") != 0) {
+        if (strnlen(info->wm, sizeof(info->wm)) > 0 && strcmp(info->wm, "Unknown") != 0) {
+            snprintf(info->de, sizeof(info->de), "%.30s | \033[36mSession\033[0m: %s | \033[36mWM\033[0m: %s", 
+                     version_info, session_type, info->wm);
         } else {
-            safe_strcpy(info->de, "X11", sizeof(info->de));
+            snprintf(info->de, sizeof(info->de), "%.40s | \033[36mSession\033[0m: %s", 
+                     version_info, session_type);
         }
     } else {
-        safe_strcpy(info->de, version_info, sizeof(info->de));
+        if (strnlen(info->wm, sizeof(info->wm)) > 0 && strcmp(info->wm, "Unknown") != 0) {
+            snprintf(info->de, sizeof(info->de), "\033[36mSession\033[0m: %s | \033[36mWM\033[0m: %s", 
+                     session_type, info->wm);
+        } else {
+            snprintf(info->de, sizeof(info->de), "\033[36mSession\033[0m: %s", session_type);
+        }
     }
+    
     info->de[sizeof(info->de) - 1] = '\0';
 }
 
@@ -465,9 +478,12 @@ void get_desktop_environment(system_info_t *info) {
     char de_with_display[128] = {0};
     char version_info[64] = {0};
     
+    // First get window manager info (needed for the combined display)
+    get_window_manager(info);
+    
     detect_de_name(de_with_display, sizeof(de_with_display));
     get_de_version(de_with_display, version_info, sizeof(version_info));
-    format_de_with_server(info, version_info);
+    format_de_with_session_and_wm(info, version_info);
 }
 
 // Helper function to map display manager to canonical name
@@ -519,7 +535,7 @@ void get_display_manager(system_info_t *info) {
 void get_window_manager(system_info_t *info) {
     char *result;
     
-    // Try to get WM from various methods
+    // Method 1: Try wmctrl first (most reliable when available)
     result = execute_command("wmctrl -m 2>/dev/null | grep 'Name:' | cut -d' ' -f2-");
     if (result && strnlen(result, sizeof(info->wm)) > 0) {
         safe_strcpy(info->wm, result, sizeof(info->wm));
@@ -527,15 +543,63 @@ void get_window_manager(system_info_t *info) {
         return;
     }
     
-    // Check for common WMs
-    if (getenv("SWAYSOCK")) {
-        safe_strcpy(info->wm, "sway", sizeof(info->wm));
-    } else if (execute_command("pgrep -x i3 >/dev/null 2>&1; echo $?") && atoi(execute_command("pgrep -x i3 >/dev/null 2>&1; echo $?")) == 0) {
-        safe_strcpy(info->wm, "i3", sizeof(info->wm));
-    } else if (execute_command("pgrep -x bspwm >/dev/null 2>&1; echo $?") && atoi(execute_command("pgrep -x bspwm >/dev/null 2>&1; echo $?")) == 0) {
-        safe_strcpy(info->wm, "bspwm", sizeof(info->wm));
+    // Method 2: Check for Wayland compositors
+    if (getenv("WAYLAND_DISPLAY")) {
+        if (getenv("SWAYSOCK")) {
+            safe_strcpy(info->wm, "Sway", sizeof(info->wm));
+        } else if (execute_command("pgrep -x sway >/dev/null 2>&1; echo $?") && 
+                   atoi(execute_command("pgrep -x sway >/dev/null 2>&1; echo $?")) == 0) {
+            safe_strcpy(info->wm, "Sway", sizeof(info->wm));
+        } else if (execute_command("pgrep -x kwin_wayland >/dev/null 2>&1; echo $?") && 
+                   atoi(execute_command("pgrep -x kwin_wayland >/dev/null 2>&1; echo $?")) == 0) {
+            safe_strcpy(info->wm, "KWin", sizeof(info->wm));
+        } else if (execute_command("pgrep -x mutter >/dev/null 2>&1; echo $?") && 
+                   atoi(execute_command("pgrep -x mutter >/dev/null 2>&1; echo $?")) == 0) {
+            safe_strcpy(info->wm, "Mutter", sizeof(info->wm));
+        } else if (execute_command("pgrep -x weston >/dev/null 2>&1; echo $?") && 
+                   atoi(execute_command("pgrep -x weston >/dev/null 2>&1; echo $?")) == 0) {
+            safe_strcpy(info->wm, "Weston", sizeof(info->wm));
+        } else {
+            safe_strcpy(info->wm, "Unknown", sizeof(info->wm));
+        }
     } else {
-        safe_strcpy(info->wm, "Unknown", sizeof(info->wm));
+        // Method 3: Check for X11 window managers via process detection
+        result = execute_command("ps aux | grep -E '(kwin|mutter|xfwm|openbox|i3|bspwm|awesome|dwm|fluxbox|jwm|herbstluftwm|qtile|xmonad|spectrwm)' | grep -v grep | head -1 | awk '{print $11}' | xargs basename");
+        if (result && strnlen(result, sizeof(info->wm)) > 0) {
+            // Capitalize first letter and format nicely
+            if (strcmp(result, "kwin") == 0 || strcmp(result, "kwin_x11") == 0) {
+                safe_strcpy(info->wm, "KWin", sizeof(info->wm));
+            } else if (strcmp(result, "mutter") == 0) {
+                safe_strcpy(info->wm, "Mutter", sizeof(info->wm));
+            } else if (strcmp(result, "xfwm4") == 0) {
+                safe_strcpy(info->wm, "Xfwm4", sizeof(info->wm));
+            } else if (strcmp(result, "openbox") == 0) {
+                safe_strcpy(info->wm, "Openbox", sizeof(info->wm));
+            } else if (strcmp(result, "i3") == 0) {
+                safe_strcpy(info->wm, "i3", sizeof(info->wm));
+            } else if (strcmp(result, "bspwm") == 0) {
+                safe_strcpy(info->wm, "bspwm", sizeof(info->wm));
+            } else if (strcmp(result, "awesome") == 0) {
+                safe_strcpy(info->wm, "Awesome", sizeof(info->wm));
+            } else {
+                // Capitalize first letter for other WMs
+                result[0] = toupper(result[0]);
+                safe_strcpy(info->wm, result, sizeof(info->wm));
+            }
+            info->wm[sizeof(info->wm) - 1] = '\0';
+            return;
+        }
+        
+        // Method 4: Fall back to checking specific processes individually
+        if (execute_command("pgrep -x i3 >/dev/null 2>&1; echo $?") && 
+            atoi(execute_command("pgrep -x i3 >/dev/null 2>&1; echo $?")) == 0) {
+            safe_strcpy(info->wm, "i3", sizeof(info->wm));
+        } else if (execute_command("pgrep -x bspwm >/dev/null 2>&1; echo $?") && 
+                   atoi(execute_command("pgrep -x bspwm >/dev/null 2>&1; echo $?")) == 0) {
+            safe_strcpy(info->wm, "bspwm", sizeof(info->wm));
+        } else {
+            safe_strcpy(info->wm, "Unknown", sizeof(info->wm));
+        }
     }
     
     info->wm[sizeof(info->wm) - 1] = '\0';
