@@ -19,6 +19,7 @@
 #include "neofetch.h"
 #include <ctype.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
 // Forward declarations for internal helper functions
 static void build_progress_bar(char *bar, size_t bar_size, int percentage, int bar_length);
@@ -32,7 +33,7 @@ static void safe_set_string(char *dest, const char *src, size_t dest_size) {
 
 // Helper function to check environment variable and set if found
 static bool try_env_and_set(const char *env_var, char *dest, size_t dest_size) {
-    char *value = getenv(env_var);
+    const char *value = getenv(env_var);
     if (value && strnlen(value, dest_size) > 0) {
         safe_set_string(dest, value, dest_size);
         return true;
@@ -67,7 +68,7 @@ static void format_wm_name(const char *raw_name, char *dest, size_t dest_size) {
 
 // Helper function to execute command and try to set result
 static bool try_command_and_set(const char *command, char *dest, size_t dest_size) {
-    char *result = execute_command(command);
+    const char *result = execute_command(command);
     if (result && strnlen(result, dest_size) > 0) {
         safe_set_string(dest, result, dest_size);
         return true;
@@ -78,8 +79,8 @@ static bool try_command_and_set(const char *command, char *dest, size_t dest_siz
 // Helper function to check if process is running
 static bool is_process_running(const char *process_name) {
     char command[256];
-    snprintf(command, sizeof(command), "pgrep -x %s >/dev/null 2>&1", process_name);
-    char *result = execute_command(command);
+    snprintf(command, sizeof(command), "pgrep -x %s >/dev/null 2>&1; echo $?", process_name);
+    const char *result = execute_command(command);
     return (result && atoi(result) == 0);
 }
 
@@ -90,6 +91,78 @@ static bool try_wm_process_check(const char *process_name, const char *wm_name, 
         return true;
     }
     return false;
+}
+
+static size_t append_fmt(char *buf, size_t buf_size, size_t pos, const char *fmt, ...) {
+    if (buf_size == 0) return 0;
+    if (pos >= buf_size) {
+        buf[buf_size - 1] = '\0';
+        return buf_size - 1;
+    }
+
+    va_list args;
+    va_start(args, fmt);
+    int written = vsnprintf(buf + pos, buf_size - pos, fmt, args);
+    va_end(args);
+
+    if (written < 0) {
+        buf[buf_size - 1] = '\0';
+        return pos;
+    }
+
+    size_t w = (size_t)written;
+    if (w >= buf_size - pos) {
+        buf[buf_size - 1] = '\0';
+        return buf_size - 1;
+    }
+
+    return pos + w;
+}
+
+static bool extract_os_release_value(char *line, const char *key, char *out, size_t out_size) {
+    size_t key_len = strlen(key);
+    if (strncmp(line, key, key_len) != 0) return false;
+
+    char *eq = strchr(line, '=');
+    if (!eq) return false;
+
+    char *val = trim_whitespace(eq + 1);
+    if (*val == '"') {
+        val++;
+        char *endq = strchr(val, '"');
+        if (endq) {
+            *endq = '\0';
+        } else {
+            char *nl = strchr(val, '\n');
+            if (nl) *nl = '\0';
+        }
+    } else {
+        char *nl = strchr(val, '\n');
+        if (nl) *nl = '\0';
+    }
+
+    safe_strcpy(out, val, out_size);
+    out[out_size - 1] = '\0';
+    return true;
+}
+
+static void set_distro_from_os_release(system_info_t *info, const char *pretty_name, const char *id, const char *version_id) {
+    if (pretty_name && pretty_name[0] != '\0') {
+        safe_set_string(info->distro, pretty_name, sizeof(info->distro));
+        return;
+    }
+
+    if (id && id[0] != '\0') {
+        if (version_id && version_id[0] != '\0') {
+            snprintf(info->distro, sizeof(info->distro), "%s %s", id, version_id);
+            info->distro[sizeof(info->distro) - 1] = '\0';
+        } else {
+            safe_set_string(info->distro, id, sizeof(info->distro));
+        }
+        return;
+    }
+
+    safe_set_string(info->distro, "Linux", sizeof(info->distro));
 }
 
 // refactored this to make it thread-safe.
@@ -125,42 +198,13 @@ void get_distro(system_info_t *info) {
     
     if (file) {
         while (fgets(line, sizeof(line), file)) {
-            // Locate '=' and extract the value part to handle quoted and unquoted values
-            if (strncmp(line, "PRETTY_NAME=", 12) == 0 || strncmp(line, "NAME=", 5) == 0 || strncmp(line, "VERSION_ID=", 11) == 0) {
-                char *eq = strchr(line, '=');
-                if (!eq) continue;
-                char *val = eq + 1;
-                val = trim_whitespace(val);
-                if (*val == '"') {
-                    char *endq = strchr(val + 1, '"');
-                    if (endq) *endq = '\0';
-                    val++;
-                } else {
-                    char *nl = strchr(val, '\n');
-                    if (nl) *nl = '\0';
-                }
-
-                if (strncmp(line, "PRETTY_NAME=", 12) == 0) {
-                    safe_strcpy(pretty_name, val, sizeof(pretty_name));
-                } else if (strncmp(line, "NAME=", 5) == 0) {
-                    safe_strcpy(id, val, sizeof(id));
-                } else if (strncmp(line, "VERSION_ID=", 11) == 0) {
-                    safe_strcpy(version_id, val, sizeof(version_id));
-                }
-            }
+            if (extract_os_release_value(line, "PRETTY_NAME", pretty_name, sizeof(pretty_name))) continue;
+            if (extract_os_release_value(line, "NAME", id, sizeof(id))) continue;
+            if (extract_os_release_value(line, "VERSION_ID", version_id, sizeof(version_id))) continue;
         }
         fclose(file);
-        
-        if (strnlen(pretty_name, sizeof(pretty_name)) > 0) {
-            safe_set_string(info->distro, pretty_name, sizeof(info->distro));
-        } else if (strnlen(id, sizeof(id)) > 0) {
-            if (strnlen(version_id, sizeof(version_id)) > 0) {
-                snprintf(info->distro, sizeof(info->distro), "%s %s", id, version_id);
-                info->distro[sizeof(info->distro) - 1] = '\0';
-            } else {
-                safe_set_string(info->distro, id, sizeof(info->distro));
-            }
-        }
+
+        set_distro_from_os_release(info, pretty_name, id, version_id);
         return;
     }
     
@@ -538,7 +582,7 @@ static const char* get_dm_name(const char *dm_str) {
 }
 
 void get_display_manager(system_info_t *info) {
-    char *dm_result = NULL;
+    const char *dm_result = NULL;
     
     // Method 1: Check systemd for active display manager
     dm_result = execute_command("systemctl list-units --type=service --state=active | grep -E '(gdm|sddm|lightdm|xdm|kdm|mdm|lxdm|slim)' | head -1 | awk '{print $1}' | sed 's/\\.service$//'");
@@ -571,7 +615,7 @@ void get_display_manager(system_info_t *info) {
 }
 
 void get_window_manager(system_info_t *info) {
-    char *result;
+    const char *result;
     
     // Method 1: Try wmctrl first (most reliable when available)
     result = execute_command("wmctrl -m 2>/dev/null | grep 'Name:' | cut -d' ' -f2-");
@@ -711,7 +755,7 @@ void get_cpu(system_info_t *info) {
         if (strncmp(line, "model name", 10) == 0) {
             char *colon = strchr(line, ':');
             if (colon) {
-                char *name = trim_whitespace(colon + 1);
+                const char *name = trim_whitespace(colon + 1);
                 safe_strcpy(cpu_name, name, sizeof(cpu_name));
                 cpu_name[sizeof(cpu_name) - 1] = '\0';
                 break;
@@ -730,12 +774,12 @@ void get_cpu(system_info_t *info) {
 }
 
 void get_gpu(system_info_t *info) {
-    char *result;
+    const char *result;
     
     // Try lspci
     result = execute_command("lspci | grep -i vga | head -1 | cut -d: -f3");
     if (result && strnlen(result, sizeof(info->gpu)) > 0) {
-        safe_set_string(info->gpu, trim_whitespace(result), sizeof(info->gpu));
+        safe_set_string(info->gpu, result, sizeof(info->gpu));
         return;
     }
     
@@ -751,14 +795,12 @@ void get_gpu(system_info_t *info) {
 
 static void build_progress_bar(char *bar, size_t bar_size, int percentage, int bar_length) {
     int filled_blocks = (percentage * bar_length) / 100;
-    int bar_pos = 0;
-    
-    // Opening bracket
-    bar_pos += snprintf(bar + bar_pos, bar_size - bar_pos, "\033[1;36m[");
-    
-    // Progress blocks
-    for (int i = 0; i < bar_length && bar_pos < (int)(bar_size - 20); i++) {  // Leave extra space for closing
-        const char *color;
+    size_t pos = 0;
+
+    pos = append_fmt(bar, bar_size, pos, "\033[1;36m[");
+
+    for (int i = 0; i < bar_length; i++) {
+        const char *color = NULL;
         if (i < filled_blocks) {
             if (percentage < 60) {
                 color = "\033[32m#";  // Green
@@ -770,13 +812,11 @@ static void build_progress_bar(char *bar, size_t bar_size, int percentage, int b
         } else {
             color = "\033[90m-";  // Dark gray
         }
-        bar_pos += snprintf(bar + bar_pos, bar_size - bar_pos, "%s", color);
+        pos = append_fmt(bar, bar_size, pos, "%s", color);
+        if (pos >= bar_size - 1) break;
     }
-    
-    // Closing bracket with proper space check
-    if (bar_pos < (int)(bar_size - 10)) {
-        snprintf(bar + bar_pos, bar_size - bar_pos, "\033[1;36m]\033[0m");
-    }
+
+    (void)append_fmt(bar, bar_size, pos, "\033[1;36m]\033[0m");
 }
 
 void get_memory(system_info_t *info) {
