@@ -602,7 +602,8 @@ static void print_info_line(const system_info_t *info, const info_entry_t *entri
             printf("-");
         }
     } else {
-        printf("\033[36m%s\033[0m: %s", entries[line_idx].label, entries[line_idx].content);
+        int entry_idx = line_idx - 1; // shift because line 1 is the underline
+        printf("\033[36m%s\033[0m: %s", entries[entry_idx].label, entries[entry_idx].content);
     }
 }
 
@@ -622,15 +623,15 @@ void print_info_with_ascii(const system_info_t *info, const ascii_art_t *art) {
     info_entry_t display_entries[20];
     int entry_count = build_display_entries(info, display_entries, 20);
     
-    int max_lines = (art->line_count > entry_count) ? art->line_count : entry_count;
-    
+    int max_lines = (art->line_count > (entry_count + 1)) ? art->line_count : (entry_count + 1);
+
     for (int i = 0; i < max_lines; i++) {
         print_ascii_line(art, i, padding);
-        
-        if (i < entry_count) {
+
+        if (i <= entry_count) {
             print_info_line(info, display_entries, i);
         }
-        
+
         printf("\n");
     }
     

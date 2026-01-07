@@ -53,12 +53,31 @@ void get_distro(system_info_t *info) {
     
     if (file) {
         while (fgets(line, sizeof(line), file)) {
-            if (strncmp(line, "PRETTY_NAME=", 12) == 0) {
-                sscanf(line, "PRETTY_NAME=\"%127[^\"]\"", pretty_name);
-            } else if (strncmp(line, "NAME=", 5) == 0) {
-                sscanf(line, "NAME=\"%63[^\"]\"", id);
-            } else if (strncmp(line, "VERSION_ID=", 11) == 0) {
-                sscanf(line, "VERSION_ID=\"%63[^\"]\"", version_id);
+            // Locate '=' and extract the value part to handle quoted and unquoted values
+            if (strncmp(line, "PRETTY_NAME=", 12) == 0 || strncmp(line, "NAME=", 5) == 0 || strncmp(line, "VERSION_ID=", 11) == 0) {
+                char *eq = strchr(line, '=');
+                if (!eq) continue;
+                char *val = eq + 1;
+                // Trim whitespace/newline
+                val = trim_whitespace(val);
+                // Strip surrounding quotes if present
+                if (*val == '"') {
+                    char *endq = strchr(val + 1, '"');
+                    if (endq) *endq = '\0';
+                    val++;
+                } else {
+                    // Remove trailing newline if any
+                    char *nl = strchr(val, '\n');
+                    if (nl) *nl = '\0';
+                }
+
+                if (strncmp(line, "PRETTY_NAME=", 12) == 0) {
+                    safe_strcpy(pretty_name, val, sizeof(pretty_name));
+                } else if (strncmp(line, "NAME=", 5) == 0) {
+                    safe_strcpy(id, val, sizeof(id));
+                } else if (strncmp(line, "VERSION_ID=", 11) == 0) {
+                    safe_strcpy(version_id, val, sizeof(version_id));
+                }
             }
         }
         fclose(file);
