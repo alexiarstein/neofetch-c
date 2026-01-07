@@ -605,7 +605,7 @@ static void print_info_line(const system_info_t *info, const info_entry_t *entri
         }
     } else {
         int entry_idx = line_idx - 1; // shift because line 1 is the underline
-        printf("\033[36m%s\033[0m: %s", entries[entry_idx].label, entries[entry_idx].content);
+        printf("\033[1;36m%s\033[0m: %s", entries[entry_idx].label, entries[entry_idx].content);
     }
 }
 

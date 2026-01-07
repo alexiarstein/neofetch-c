@@ -18,10 +18,52 @@
 
 #include "neofetch.h"
 #include <ctype.h>
+#include <stdbool.h>
 
 // Forward declarations for internal helper functions
 static void build_progress_bar(char *bar, size_t bar_size, int percentage, int bar_length);
 static void get_cpu_load_string(char *cpu_load_str, size_t str_size, int bar_length);
+
+// Helper function to safely set string with null termination
+static void safe_set_string(char *dest, const char *src, size_t dest_size) {
+    safe_strcpy(dest, src, dest_size);
+    dest[dest_size - 1] = '\0';
+}
+
+// Helper function to check environment variable and set if found
+static bool try_env_and_set(const char *env_var, char *dest, size_t dest_size) {
+    char *value = getenv(env_var);
+    if (value && strnlen(value, dest_size) > 0) {
+        safe_set_string(dest, value, dest_size);
+        return true;
+    }
+    return false;
+}
+
+// Helper function to format window manager names consistently
+static void format_wm_name(const char *raw_name, char *dest, size_t dest_size) {
+    if (strcmp(raw_name, "kwin") == 0 || strcmp(raw_name, "kwin_x11") == 0) {
+        safe_set_string(dest, "KWin", dest_size);
+    } else if (strcmp(raw_name, "mutter") == 0) {
+        safe_set_string(dest, "Mutter", dest_size);
+    } else if (strcmp(raw_name, "xfwm4") == 0) {
+        safe_set_string(dest, "Xfwm4", dest_size);
+    } else if (strcmp(raw_name, "openbox") == 0) {
+        safe_set_string(dest, "Openbox", dest_size);
+    } else if (strcmp(raw_name, "i3") == 0) {
+        safe_set_string(dest, "i3", dest_size);
+    } else if (strcmp(raw_name, "bspwm") == 0) {
+        safe_set_string(dest, "bspwm", dest_size);
+    } else if (strcmp(raw_name, "awesome") == 0) {
+        safe_set_string(dest, "Awesome", dest_size);
+    } else {
+        // Capitalize first letter for other WMs
+        char formatted_name[64];
+        safe_strcpy(formatted_name, raw_name, sizeof(formatted_name));
+        formatted_name[0] = toupper(formatted_name[0]);
+        safe_set_string(dest, formatted_name, dest_size);
+    }
+}
 
 // refactored this to make it thread-safe.
 void get_user_hostname(system_info_t *info) {
@@ -30,16 +72,16 @@ void get_user_hostname(system_info_t *info) {
     char buf[1024];
     
     if (getpwuid_r(getuid(), &pwd, buf, sizeof(buf), &result) == 0 && result != NULL) {
-        safe_strcpy(info->user, pwd.pw_name, sizeof(info->user));
-        info->user[sizeof(info->user) - 1] = '\0';
+        safe_set_string(info->user, pwd.pw_name, sizeof(info->user));
     } else {
-        safe_strcpy(info->user, "unknown", sizeof(info->user));
+        safe_set_string(info->user, "unknown", sizeof(info->user));
     }
     
     if (gethostname(info->hostname, sizeof(info->hostname)) != 0) {
-        safe_strcpy(info->hostname, "unknown", sizeof(info->hostname));
+        safe_set_string(info->hostname, "unknown", sizeof(info->hostname));
+    } else {
+        info->hostname[sizeof(info->hostname) - 1] = '\0';
     }
-    info->hostname[sizeof(info->hostname) - 1] = '\0';
 }
 
 void get_distro(system_info_t *info) {
@@ -115,20 +157,18 @@ void get_architecture(system_info_t *info) {
         
         // 'beautifying' arch outputs to something more human-friendly
         if (strcmp(output, "x86_64") == 0) {
-            safe_strcpy(info->architecture, "x86-64", sizeof(info->architecture));
+            safe_set_string(info->architecture, "x86-64", sizeof(info->architecture));
         } else if (strcmp(output, "i386") == 0 || strcmp(output, "i686") == 0) {
-            safe_strcpy(info->architecture, "x86", sizeof(info->architecture));
+            safe_set_string(info->architecture, "x86", sizeof(info->architecture));
         } else if (strcmp(output, "aarch64") == 0) {
-            safe_strcpy(info->architecture, "ARM64", sizeof(info->architecture));
+            safe_set_string(info->architecture, "ARM64", sizeof(info->architecture));
         } else if (strncmp(output, "arm", 3) == 0) {
-            safe_strcpy(info->architecture, "ARM", sizeof(info->architecture));
+            safe_set_string(info->architecture, "ARM", sizeof(info->architecture));
         } else {
-            safe_strcpy(info->architecture, output, sizeof(info->architecture));
+            safe_set_string(info->architecture, output, sizeof(info->architecture));
         }
-        info->architecture[sizeof(info->architecture) - 1] = '\0';
     } else {
-        safe_strcpy(info->architecture, "Unknown", sizeof(info->architecture));
-        info->architecture[sizeof(info->architecture) - 1] = '\0';
+        safe_set_string(info->architecture, "Unknown", sizeof(info->architecture));
     }
 }
 
@@ -221,9 +261,8 @@ void get_uptime(system_info_t *info) {
     if (sysinfo(&s_info) == 0) {
         format_uptime(s_info.uptime, info->uptime, sizeof(info->uptime));
     } else {
-        safe_strcpy(info->uptime, "Unknown", sizeof(info->uptime));
+        safe_set_string(info->uptime, "Unknown", sizeof(info->uptime));
     }
-    info->uptime[sizeof(info->uptime) - 1] = '\0';
 }
 
 static int count_packages(const char *command) {
@@ -364,22 +403,17 @@ void get_resolution(system_info_t *info) {
 }
 
 static void detect_de_name(char *de_with_display, size_t size) {
-    char *de = NULL;
-    
-    if ((de = getenv("XDG_CURRENT_DESKTOP"))) {
-        safe_strcpy(de_with_display, de, size - 1);
-    } else if ((de = getenv("DESKTOP_SESSION"))) {
-        safe_strcpy(de_with_display, de, size - 1);
-    } else if ((de = getenv("XDG_SESSION_DESKTOP"))) {
-        safe_strcpy(de_with_display, de, size - 1);
+    if (try_env_and_set("XDG_CURRENT_DESKTOP", de_with_display, size) ||
+        try_env_and_set("DESKTOP_SESSION", de_with_display, size) ||
+        try_env_and_set("XDG_SESSION_DESKTOP", de_with_display, size)) {
+        return;
     } else if (getenv("KDE_FULL_SESSION")) {
-        safe_strcpy(de_with_display, "KDE", size - 1);
+        safe_set_string(de_with_display, "KDE", size);
     } else if (getenv("GNOME_DESKTOP_SESSION_ID")) {
-        safe_strcpy(de_with_display, "GNOME", size - 1);
+        safe_set_string(de_with_display, "GNOME", size);
     } else {
-        safe_strcpy(de_with_display, "Unknown", size - 1);
+        safe_set_string(de_with_display, "Unknown", size);
     }
-    de_with_display[size - 1] = '\0';
 }
 
 static void get_de_version_info(const char *version_cmd, const char *fallback, 
@@ -440,18 +474,18 @@ static void format_de_with_session_and_wm(system_info_t *info, const char *versi
     // Format the comprehensive DE line
     if (strnlen(version_info, sizeof(info->de)) > 0 && strcmp(version_info, "Unknown") != 0) {
         if (strnlen(info->wm, sizeof(info->wm)) > 0 && strcmp(info->wm, "Unknown") != 0) {
-            snprintf(info->de, sizeof(info->de), "%.30s | \033[36mSession\033[0m: %s | \033[36mWM\033[0m: %s", 
+            snprintf(info->de, sizeof(info->de), "%.30s | \033[1;36mSession\033[0m: %s | \033[1;36mWM\033[0m: %s", 
                      version_info, session_type, info->wm);
         } else {
-            snprintf(info->de, sizeof(info->de), "%.40s | \033[36mSession\033[0m: %s", 
+            snprintf(info->de, sizeof(info->de), "%.40s | \033[1;36mSession\033[0m: %s", 
                      version_info, session_type);
         }
     } else {
         if (strnlen(info->wm, sizeof(info->wm)) > 0 && strcmp(info->wm, "Unknown") != 0) {
-            snprintf(info->de, sizeof(info->de), "\033[36mSession\033[0m: %s | \033[36mWM\033[0m: %s", 
+            snprintf(info->de, sizeof(info->de), "\033[1;36mSession\033[0m: %s | \033[1;36mWM\033[0m: %s", 
                      session_type, info->wm);
         } else {
-            snprintf(info->de, sizeof(info->de), "\033[36mSession\033[0m: %s", session_type);
+            snprintf(info->de, sizeof(info->de), "\033[1;36mSession\033[0m: %s", session_type);
         }
     }
     
@@ -550,27 +584,7 @@ void get_window_manager(system_info_t *info) {
         // Method 3: Check for X11 window managers via process detection
         result = execute_command("ps aux | grep -E '(kwin|mutter|xfwm|openbox|i3|bspwm|awesome|dwm|fluxbox|jwm|herbstluftwm|qtile|xmonad|spectrwm)' | grep -v grep | head -1 | awk '{print $11}' | xargs basename");
         if (result && strnlen(result, sizeof(info->wm)) > 0) {
-            // Capitalize first letter and format nicely
-            if (strcmp(result, "kwin") == 0 || strcmp(result, "kwin_x11") == 0) {
-                safe_strcpy(info->wm, "KWin", sizeof(info->wm));
-            } else if (strcmp(result, "mutter") == 0) {
-                safe_strcpy(info->wm, "Mutter", sizeof(info->wm));
-            } else if (strcmp(result, "xfwm4") == 0) {
-                safe_strcpy(info->wm, "Xfwm4", sizeof(info->wm));
-            } else if (strcmp(result, "openbox") == 0) {
-                safe_strcpy(info->wm, "Openbox", sizeof(info->wm));
-            } else if (strcmp(result, "i3") == 0) {
-                safe_strcpy(info->wm, "i3", sizeof(info->wm));
-            } else if (strcmp(result, "bspwm") == 0) {
-                safe_strcpy(info->wm, "bspwm", sizeof(info->wm));
-            } else if (strcmp(result, "awesome") == 0) {
-                safe_strcpy(info->wm, "Awesome", sizeof(info->wm));
-            } else {
-                // Capitalize first letter for other WMs
-                result[0] = toupper(result[0]);
-                safe_strcpy(info->wm, result, sizeof(info->wm));
-            }
-            info->wm[sizeof(info->wm) - 1] = '\0';
+            format_wm_name(result, info->wm, sizeof(info->wm));
             return;
         }
         
@@ -616,13 +630,11 @@ void get_icons(system_info_t *info) {
     // Try gsettings for icon theme
     result = execute_command("gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null | tr -d \"'\"");
     if (result && strnlen(result, sizeof(info->icons)) > 0 && strcmp(result, "''") != 0) {
-        safe_strcpy(info->icons, result, sizeof(info->icons));
-        info->icons[sizeof(info->icons) - 1] = '\0';
+        safe_set_string(info->icons, result, sizeof(info->icons));
         return;
     }
     
-    safe_strcpy(info->icons, "Unknown", sizeof(info->icons));
-    info->icons[sizeof(info->icons) - 1] = '\0';
+    safe_set_string(info->icons, "Unknown", sizeof(info->icons));
 }
 
 void get_terminal(system_info_t *info) {
@@ -666,22 +678,20 @@ static void get_cpu_load_string(char *cpu_load_str, size_t str_size, int bar_len
     int cpu_percentage = (int)((loadavg[0] / num_cores) * 100.0);
     if (cpu_percentage > 100) cpu_percentage = 100;
     
-    char cpu_bar[64];  // Reduced size
+    char cpu_bar[128];  // Increased size to accommodate ANSI codes
     build_progress_bar(cpu_bar, sizeof(cpu_bar), cpu_percentage, bar_length);
-    snprintf(cpu_load_str, str_size, " | \033[36mCPU Load\033[0m: %s%d%%", cpu_bar, cpu_percentage);
+    snprintf(cpu_load_str, str_size, " | \033[1;36mCPU Load\033[0m: %s %d%%", cpu_bar, cpu_percentage);
 }
 
 void get_terminal_font(system_info_t *info) {
     // This varies greatly by terminal emulator
-    safe_strcpy(info->term_font, "Unknown", sizeof(info->term_font));
-    info->term_font[sizeof(info->term_font) - 1] = '\0';
+    safe_set_string(info->term_font, "Unknown", sizeof(info->term_font));
 }
 
 void get_cpu(system_info_t *info) {
     FILE *file = fopen("/proc/cpuinfo", "r");
     if (!file) {
-        safe_strcpy(info->cpu, "Unknown", sizeof(info->cpu));
-        info->cpu[sizeof(info->cpu) - 1] = '\0';
+        safe_set_string(info->cpu, "Unknown", sizeof(info->cpu));
         return;
     }
     
@@ -716,34 +726,29 @@ void get_gpu(system_info_t *info) {
     // Try lspci
     result = execute_command("lspci | grep -i vga | head -1 | cut -d: -f3");
     if (result && strnlen(result, sizeof(info->gpu)) > 0) {
-        safe_strcpy(info->gpu, trim_whitespace(result), sizeof(info->gpu));
-        info->gpu[sizeof(info->gpu) - 1] = '\0';
+        safe_set_string(info->gpu, trim_whitespace(result), sizeof(info->gpu));
         return;
     }
     
     // Try nvidia-smi
     result = execute_command("nvidia-smi --query-gpu=name --format=csv,noheader,nounits 2>/dev/null | head -1");
     if (result && strnlen(result, sizeof(info->gpu)) > 0) {
-        safe_strcpy(info->gpu, result, sizeof(info->gpu));
-        info->gpu[sizeof(info->gpu) - 1] = '\0';
+        safe_set_string(info->gpu, result, sizeof(info->gpu));
         return;
     }
     
-    safe_strcpy(info->gpu, "Unknown", sizeof(info->gpu));
-    info->gpu[sizeof(info->gpu) - 1] = '\0';
+    safe_set_string(info->gpu, "Unknown", sizeof(info->gpu));
 }
 
 static void build_progress_bar(char *bar, size_t bar_size, int percentage, int bar_length) {
     int filled_blocks = (percentage * bar_length) / 100;
     int bar_pos = 0;
     
-    bar_pos += snprintf(bar + bar_pos, bar_size - bar_pos, "\033[36m[");
+    // Opening bracket
+    bar_pos += snprintf(bar + bar_pos, bar_size - bar_pos, "\033[1;36m[");
     
-    for (int i = 0; i < bar_length; i++) {
-        if (bar_pos >= (int)(bar_size - 1)) {
-            break;
-        }
-        
+    // Progress blocks
+    for (int i = 0; i < bar_length && bar_pos < (int)(bar_size - 20); i++) {  // Leave extra space for closing
         const char *color;
         if (i < filled_blocks) {
             if (percentage < 60) {
@@ -759,7 +764,10 @@ static void build_progress_bar(char *bar, size_t bar_size, int percentage, int b
         bar_pos += snprintf(bar + bar_pos, bar_size - bar_pos, "%s", color);
     }
     
-    snprintf(bar + bar_pos, bar_size - bar_pos, "\033[36m]\033[0m");
+    // Closing bracket with proper space check
+    if (bar_pos < (int)(bar_size - 10)) {
+        snprintf(bar + bar_pos, bar_size - bar_pos, "\033[1;36m]\033[0m");
+    }
 }
 
 void get_memory(system_info_t *info) {
@@ -787,7 +795,7 @@ void get_memory(system_info_t *info) {
     char progress_bar[128];
     build_progress_bar(progress_bar, sizeof(progress_bar), percentage, bar_length);
     
-    snprintf(info->memory, sizeof(info->memory), "%.12s/%.12s %s%d%%", 
+    snprintf(info->memory, sizeof(info->memory), "%.12s/%.12s %s %d%%", 
              used_str, total_str, progress_bar, percentage);
     info->memory_bar[0] = '\0';
     info->memory[sizeof(info->memory) - 1] = '\0';
