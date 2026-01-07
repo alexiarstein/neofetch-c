@@ -286,15 +286,29 @@ static void normalize_string(const char *input, char *output, size_t size) {
     output[j] = '\0';
 }
 
-// Check if file exists
-static int file_exists(const char *filepath) {
+// Check if file exists in any of the search paths
+static int file_exists_in_paths(const char *filename) {
+    char filepath[512];
     struct stat st;
-    return (stat(filepath, &st) == 0 && S_ISREG(st.st_mode));
+    
+    const char *search_paths[] = {
+        "/usr/share/neofetch/ascii/%s",
+        "/usr/local/share/neofetch/ascii/%s",
+        "./ascii/%s",
+        NULL
+    };
+    
+    for (int i = 0; search_paths[i] != NULL; i++) {
+        snprintf(filepath, sizeof(filepath), search_paths[i], filename);
+        if (stat(filepath, &st) == 0 && S_ISREG(st.st_mode)) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 void map_distro_to_ascii_file(const char *distro, char *filename, size_t size) {
     char normalized_distro[256];
-    char full_path[512];
     
     // Normalize the input distro name
     normalize_string(distro, normalized_distro, sizeof(normalized_distro));
@@ -302,8 +316,7 @@ void map_distro_to_ascii_file(const char *distro, char *filename, size_t size) {
     // First pass: exact matches
     for (int i = 0; distro_mappings[i].distro_pattern != NULL; i++) {
         if (strcmp(normalized_distro, distro_mappings[i].distro_pattern) == 0) {
-            snprintf(full_path, sizeof(full_path), "ascii/%s", distro_mappings[i].ascii_file);
-            if (file_exists(full_path)) {
+            if (file_exists_in_paths(distro_mappings[i].ascii_file)) {
                 strncpy(filename, distro_mappings[i].ascii_file, size - 1);
                 filename[size - 1] = '\0';
                 return;
@@ -314,8 +327,7 @@ void map_distro_to_ascii_file(const char *distro, char *filename, size_t size) {
     // Second pass: substring matches
     for (int i = 0; distro_mappings[i].distro_pattern != NULL; i++) {
         if (strstr(normalized_distro, distro_mappings[i].distro_pattern) != NULL) {
-            snprintf(full_path, sizeof(full_path), "ascii/%s", distro_mappings[i].ascii_file);
-            if (file_exists(full_path)) {
+            if (file_exists_in_paths(distro_mappings[i].ascii_file)) {
                 strncpy(filename, distro_mappings[i].ascii_file, size - 1);
                 filename[size - 1] = '\0';
                 return;
@@ -324,7 +336,7 @@ void map_distro_to_ascii_file(const char *distro, char *filename, size_t size) {
     }
     
     // Fallback: try to construct filename directly from normalized distro name
-    char fallback_name[256];
+    char fallback_name[249];  // Reduced to leave room for ".ascii" suffix (249 + 6 + 1 = 256)
     strncpy(fallback_name, normalized_distro, sizeof(fallback_name) - 1);
     fallback_name[sizeof(fallback_name) - 1] = '\0';
     
@@ -335,14 +347,16 @@ void map_distro_to_ascii_file(const char *distro, char *filename, size_t size) {
         }
     }
     
-    snprintf(full_path, sizeof(full_path), "ascii/%s.ascii", fallback_name);
-    if (file_exists(full_path)) {
-        snprintf(filename, size, "%s.ascii", fallback_name);
+    char fallback_file[256];
+    snprintf(fallback_file, sizeof(fallback_file), "%s.ascii", fallback_name);
+    if (file_exists_in_paths(fallback_file)) {
+        strncpy(filename, fallback_file, size - 1);
+        filename[size - 1] = '\0';
         return;
     }
     
-    // Final fallback: use a default or indicate unknown
-    strncpy(filename, "arch.ascii", size - 1);
+    // Final fallback: use a default
+    strncpy(filename, "linux.ascii", size - 1);
     filename[size - 1] = '\0';
 }
     

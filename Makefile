@@ -36,7 +36,7 @@ clean:
 
 install: $(TARGET)
 	install -D -m 755 $(TARGET) /usr/local/bin/$(TARGET)
-	install -d /usr/share/neofetch/ascii
+	install -d -m 755 /usr/share/neofetch/ascii
 	install -m 644 ascii/*.ascii /usr/share/neofetch/ascii/
 
 uninstall:
