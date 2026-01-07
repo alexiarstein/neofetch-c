@@ -136,4 +136,10 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-Some ASCII art needs reworking and coloring, feel free to 
+Some ASCII art needs reworking and coloring, feel free to correct the logos you wish and send me them.
+
+To add a new distro to neofetch-c you can prepare it yourself and send me a pull request (adding the art in ascii/ and editing ascii.c)
+
+Or open an issue on this project and paste the art and the name of the distro as its shown in lsb_release and /etc/os-release
+
+Thanks!

@@ -21,6 +21,19 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
+// NOTE: MacOS Support is not yet implemented. It will, though. I'm working on it. 
+// It sort of works modifying sysinfo.c but won't be able to properly detect aqua, quartz compositor, etc. 
+// but I'll get it working soonish. -- Alexia
+
+
+// Another note (this one for contributors)
+// The simplest way to add support for a new distro's ASCII art is to add an entry
+// to the `distro_mappings` array below, mapping a normalized distro name pattern
+// to the corresponding ASCII art filename located in the `ascii/` directory.
+
+// And please, please, please... Follow the alphabetic order. Don't put a distro starting with the letter Z next to GoldenDog, (heh)
+
+
 typedef struct {
     const char *distro_pattern;
     const char *ascii_file;
@@ -266,7 +279,6 @@ static const distro_mapping_t distro_mappings[] = {
     {NULL, NULL} // End marker
 };
 
-// Fast string normalization for comparison
 static void normalize_string(const char *input, char *output, size_t size) {
     size_t i = 0, j = 0;
     
@@ -279,12 +291,10 @@ static void normalize_string(const char *input, char *output, size_t size) {
         i++;
     }
     
-    // Remove trailing space
     if (j > 0 && output[j-1] == ' ') j--;
     output[j] = '\0';
 }
 
-// Check if file exists in any of the search paths
 static int file_exists_in_paths(const char *filename) {
     char filepath[512];
     struct stat st;
@@ -308,10 +318,8 @@ static int file_exists_in_paths(const char *filename) {
 void map_distro_to_ascii_file(const char *distro, char *filename, size_t size) {
     char normalized_distro[256];
     
-    // Normalize the input distro name
     normalize_string(distro, normalized_distro, sizeof(normalized_distro));
     
-    // First pass: exact matches
     for (int i = 0; distro_mappings[i].distro_pattern != NULL; i++) {
         if (strcmp(normalized_distro, distro_mappings[i].distro_pattern) == 0 &&
             file_exists_in_paths(distro_mappings[i].ascii_file)) {
@@ -331,7 +339,6 @@ void map_distro_to_ascii_file(const char *distro, char *filename, size_t size) {
         }
     }
     
-    // Fallback: try to construct filename directly from normalized distro name
     char fallback_name[249];  // Reduced to leave room for ".ascii" suffix (249 + 6 + 1 = 256)
     safe_strcpy(fallback_name, normalized_distro, sizeof(fallback_name));
     fallback_name[sizeof(fallback_name) - 1] = '\0';
@@ -351,16 +358,11 @@ void map_distro_to_ascii_file(const char *distro, char *filename, size_t size) {
         return;
     }
     
-    // Final fallback: use a default
+    // Default to linux.ascii if no match found
     safe_strcpy(filename, "linux.ascii", size - 1);
     filename[size - 1] = '\0';
 }
     
-    // (removed duplicate hardcoded if/else mapping - replaced by `distro_mappings` and
-    // the lookup logic above which selects an ASCII filename based on normalized distro
-    // names and available files under the `ascii/` directory)
-
-// Calculate actual display width of a string (excluding ANSI escape sequences)
 int calculate_display_width(const char *str) {
     int width = 0;
     int i = 0;
@@ -547,14 +549,14 @@ static int build_display_entries(const system_info_t *info, info_entry_t *entrie
         info->user, info->distro, info->architecture, info->hardware,
         info->model, info->kernel, info->uptime, info->packages,
         info->shell, info->resolution, info->de, info->dm,
-        info->theme, info->icons, info->terminal, info->cpu,
-        info->gpu, info->memory
+        info->theme, info->icons, info->terminal, info->gpu,
+        info->cpu, info->memory
     };
     
     const char *info_labels[] = {
         "", "OS", "Architecture", "Host", "Model", "Kernel",
-        "Uptime", "Packages", "Shell", "Resolution", "DE", "DM",
-        "Theme", "Icons", "Terminal", "CPU", "GPU", "Memory"
+        "Uptime", "Packages", "Shell", "Resolution", "DE", "Display Manager",
+        "Theme", "Icons", "Terminal", "GPU", "CPU", "Memory"
     };
     
     int entry_count = 0;

@@ -19,8 +19,12 @@
 #include "neofetch.h"
 #include <ctype.h>
 
+// Forward declarations for internal helper functions
+static void build_progress_bar(char *bar, size_t bar_size, int percentage, int bar_length);
+static void get_cpu_load_string(char *cpu_load_str, size_t str_size, int bar_length);
+
+// refactored this to make it thread-safe.
 void get_user_hostname(system_info_t *info) {
-    // Get username using thread-safe version
     struct passwd pwd = {0};
     struct passwd *result = NULL;
     char buf[1024];
@@ -32,7 +36,6 @@ void get_user_hostname(system_info_t *info) {
         safe_strcpy(info->user, "unknown", sizeof(info->user));
     }
     
-    // Get hostname
     if (gethostname(info->hostname, sizeof(info->hostname)) != 0) {
         safe_strcpy(info->hostname, "unknown", sizeof(info->hostname));
     }
@@ -46,7 +49,6 @@ void get_distro(system_info_t *info) {
     char version_id[64] = {0};
     char pretty_name[128] = {0};
     
-    // Try to read /etc/os-release
     file = fopen("/etc/os-release", "r");
     if (!file) {
         file = fopen("/usr/lib/os-release", "r");
@@ -59,15 +61,12 @@ void get_distro(system_info_t *info) {
                 char *eq = strchr(line, '=');
                 if (!eq) continue;
                 char *val = eq + 1;
-                // Trim whitespace/newline
                 val = trim_whitespace(val);
-                // Strip surrounding quotes if present
                 if (*val == '"') {
                     char *endq = strchr(val + 1, '"');
                     if (endq) *endq = '\0';
                     val++;
                 } else {
-                    // Remove trailing newline if any
                     char *nl = strchr(val, '\n');
                     if (nl) *nl = '\0';
                 }
@@ -96,7 +95,7 @@ void get_distro(system_info_t *info) {
         return;
     }
     
-    // Fallback: try lsb_release
+    // NEW: Fallback if /etc/os-release is not present. We try to get it from lsb_release -- Alexia
     const char *result = execute_command("lsb_release -d 2>/dev/null | cut -f2");
     if (result && strnlen(result, sizeof(info->distro)) > 0) {
         safe_strcpy(info->distro, result, sizeof(info->distro));
@@ -104,7 +103,7 @@ void get_distro(system_info_t *info) {
         return;
     }
     
-    // Last resort
+    // If all else fails, we display it as "Linux" (not ideal but good enough for now)
     safe_strcpy(info->distro, "Linux", sizeof(info->distro));
     info->distro[sizeof(info->distro) - 1] = '\0';
 }
@@ -112,10 +111,9 @@ void get_distro(system_info_t *info) {
 void get_architecture(system_info_t *info) {
     char *output = execute_command("uname -m");
     if (output && strnlen(output, sizeof(info->architecture)) > 0) {
-        // Remove newline and copy architecture
         output[strcspn(output, "\n")] = '\0';
         
-        // Map common architectures to more descriptive names
+        // 'beautifying' arch outputs to something more human-friendly
         if (strcmp(output, "x86_64") == 0) {
             safe_strcpy(info->architecture, "x86-64", sizeof(info->architecture));
         } else if (strcmp(output, "i386") == 0 || strcmp(output, "i686") == 0) {
@@ -147,7 +145,6 @@ static void copy_hardware_info(char *dest, size_t dest_size, const char *src) {
     }
 }
 
-// Helper function to extract value after colon
 static void extract_value_after_colon(const char *line, char *dest, size_t dest_size) {
     const char *value_start = strstr(line, ":");
     if (value_start) {
@@ -158,7 +155,6 @@ static void extract_value_after_colon(const char *line, char *dest, size_t dest_
     }
 }
 
-// Helper function to try getting hardware info from DMI
 static void get_hardware_from_dmi(char *vendor, size_t vendor_size, char *model, size_t model_size) {
     const char *vendor_output = execute_command("cat /sys/class/dmi/id/sys_vendor 2>/dev/null || cat /sys/class/dmi/id/board_vendor 2>/dev/null");
     if (vendor_output) {
@@ -171,7 +167,6 @@ static void get_hardware_from_dmi(char *vendor, size_t vendor_size, char *model,
     }
 }
 
-// Helper function to try getting hardware info from hostnamectl
 static void get_hardware_from_hostnamectl(char *vendor, size_t vendor_size, char *model, size_t model_size) {
     if (strcmp(vendor, "Unknown") != 0 && strcmp(model, "Unknown") != 0) {
         return; // Already have both values
@@ -198,13 +193,11 @@ void get_hardware(system_info_t *info) {
     char vendor[128] = "Unknown";
     char model[128] = "Unknown";
     
-    // Try DMI first
+    // First we try DMI, otherwise we fallback to hostnamectl -- Alexia
     get_hardware_from_dmi(vendor, sizeof(vendor), model, sizeof(model));
-    
-    // Try hostnamectl as fallback
     get_hardware_from_hostnamectl(vendor, sizeof(vendor), model, sizeof(model));
     
-    // Store results
+    // Storing results using the new function safe_strcpy to avoid involuntary overflows
     safe_strcpy(info->hardware, vendor, sizeof(info->hardware));
     info->hardware[sizeof(info->hardware) - 1] = '\0';
     
@@ -233,13 +226,11 @@ void get_uptime(system_info_t *info) {
     info->uptime[sizeof(info->uptime) - 1] = '\0';
 }
 
-// Helper function to count packages for a specific package manager
 static int count_packages(const char *command) {
     char *result = execute_command(command);
     return (result && atoi(result) > 0) ? atoi(result) : 0;
 }
 
-// Helper function to add package count to breakdown string
 static void add_package_breakdown(char *breakdown, size_t breakdown_size, 
                                    int *breakdown_count, const char *pm_name, int count) {
     if (count > 0) {
@@ -309,12 +300,10 @@ void get_packages(system_info_t *info) {
 void get_shell(system_info_t *info) {
     char *shell = getenv("SHELL");
     if (shell) {
-        // Extract just the shell name from the path
         char *shell_name = strrchr(shell, '/');
         if (shell_name) {
             shell_name++; // Skip the '/'
             
-            // Try to get shell version
             char *version_result = NULL;
             
             if (strcmp(shell_name, "bash") == 0) {
@@ -324,7 +313,6 @@ void get_shell(system_info_t *info) {
             } else if (strcmp(shell_name, "fish") == 0) {
                 version_result = execute_command("fish --version 2>/dev/null | grep -oP '[0-9.]+'");
             } else if (strcmp(shell_name, "dash") == 0 || strcmp(shell_name, "sh") == 0) {
-                // dash/sh often don't have easy version flags, just use name
                 safe_strcpy(info->shell, shell_name, sizeof(info->shell));
                 info->shell[sizeof(info->shell) - 1] = '\0';
                 return;
@@ -347,7 +335,9 @@ void get_shell(system_info_t *info) {
 void get_resolution(system_info_t *info) {
     char *result;
     
-    // Try xrandr first (for X11) - get all connected monitor resolutions
+// NEW: We try to get all connected monitors and their resolutions. We try first with xrandr (X11) and
+// then we try with wlr-rander for Wayland, and finally we check /sys/class/drm -- Alexia
+
     result = execute_command("xrandr --current 2>/dev/null | grep ' connected' | grep -o '[0-9]\\+x[0-9]\\+' | tr '\\n' ', ' | sed 's/,$//' | sed 's/,/, /g'");
     if (result && strnlen(result, sizeof(info->resolution)) > 0) {
         safe_strcpy(info->resolution, result, sizeof(info->resolution));
@@ -355,7 +345,6 @@ void get_resolution(system_info_t *info) {
         return;
     }
     
-    // Try wlr-randr (for Wayland)
     result = execute_command("wlr-randr 2>/dev/null | grep -o '[0-9]\\+x[0-9]\\+' | head -1");
     if (result && strnlen(result, sizeof(info->resolution)) > 0) {
         safe_strcpy(info->resolution, result, sizeof(info->resolution));
@@ -363,7 +352,6 @@ void get_resolution(system_info_t *info) {
         return;
     }
     
-    // Check /sys/class/drm
     result = execute_command("find /sys/class/drm/*/modes -type f -exec cat {} \\; 2>/dev/null | head -1");
     if (result && strnlen(result, sizeof(info->resolution)) > 0) {
         safe_strcpy(info->resolution, result, sizeof(info->resolution));
@@ -375,7 +363,6 @@ void get_resolution(system_info_t *info) {
     info->resolution[sizeof(info->resolution) - 1] = '\0';
 }
 
-// Helper function to detect desktop environment name
 static void detect_de_name(char *de_with_display, size_t size) {
     char *de = NULL;
     
@@ -395,7 +382,6 @@ static void detect_de_name(char *de_with_display, size_t size) {
     de_with_display[size - 1] = '\0';
 }
 
-// Helper function to get DE version with fallback
 static void get_de_version_info(const char *version_cmd, const char *fallback, 
                                  char *version_info, size_t size) {
     char *version = execute_command(version_cmd);
@@ -407,7 +393,6 @@ static void get_de_version_info(const char *version_cmd, const char *fallback,
     }
 }
 
-// Helper to process DE version with consistent formatting
 static void format_de_version(const char *version_cmd, const char *fallback,
                                char *version_info, size_t size, const char *display_prefix, size_t prefix_len) {
     char temp[64];
@@ -423,7 +408,7 @@ static void format_de_version(const char *version_cmd, const char *fallback,
 static void get_de_version(const char *de_with_display, char *version_info, size_t size) {
     if (strstr(de_with_display, "KDE") || strstr(de_with_display, "plasma")) {
         format_de_version("plasmashell --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+'",
-                         "KDE", version_info, size, "Plasma", 6);
+                         "KDE", version_info, size, "KDE Plasma", 10); // NEW: Shows "KDE Plasma instead of just 'Plasma' -- Alexia"
     } else if (strstr(de_with_display, "GNOME")) {
         format_de_version("gnome-shell --version 2>/dev/null | grep -o '[0-9]\\+\\.[0-9]\\+'",
                          "GNOME", version_info, size, "GNOME", 5);
@@ -442,11 +427,10 @@ static void get_de_version(const char *de_with_display, char *version_info, size
     }
 }
 
-// Helper function to format DE with display server
+
 static void format_de_with_session_and_wm(system_info_t *info, const char *version_info) {
     char session_type[16] = "Unknown";
     
-    // Determine session type
     if (getenv("WAYLAND_DISPLAY")) {
         safe_strcpy(session_type, "Wayland", sizeof(session_type));
     } else if (getenv("DISPLAY")) {
@@ -646,7 +630,6 @@ void get_terminal(system_info_t *info) {
     char *term_program = getenv("TERM_PROGRAM");
     char *colorterm = getenv("COLORTERM");
     
-    // Try to get more specific terminal information
     if (term_program) {
         safe_strcpy(info->terminal, term_program, sizeof(info->terminal));
     } else if (colorterm) {
@@ -667,6 +650,27 @@ void get_terminal(system_info_t *info) {
     info->terminal[sizeof(info->terminal) - 1] = '\0';
 }
 
+static void get_cpu_load_string(char *cpu_load_str, size_t str_size, int bar_length) {
+    double loadavg[3];
+    cpu_load_str[0] = '\0';
+    
+    if (getloadavg(loadavg, 1) == -1) {
+        return;
+    }
+    
+    long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    if (num_cores <= 0) {
+        return;
+    }
+    
+    int cpu_percentage = (int)((loadavg[0] / num_cores) * 100.0);
+    if (cpu_percentage > 100) cpu_percentage = 100;
+    
+    char cpu_bar[64];  // Reduced size
+    build_progress_bar(cpu_bar, sizeof(cpu_bar), cpu_percentage, bar_length);
+    snprintf(cpu_load_str, str_size, " | \033[36mCPU Load\033[0m: %s%d%%", cpu_bar, cpu_percentage);
+}
+
 void get_terminal_font(system_info_t *info) {
     // This varies greatly by terminal emulator
     safe_strcpy(info->term_font, "Unknown", sizeof(info->term_font));
@@ -682,21 +686,27 @@ void get_cpu(system_info_t *info) {
     }
     
     char line[256];
+    char cpu_name[256] = "Unknown";
+    
     while (fgets(line, sizeof(line), file)) {
         if (strncmp(line, "model name", 10) == 0) {
             char *colon = strchr(line, ':');
             if (colon) {
-                char *cpu_name = trim_whitespace(colon + 1);
-                safe_strcpy(info->cpu, cpu_name, sizeof(info->cpu));
-                info->cpu[sizeof(info->cpu) - 1] = '\0';
-                fclose(file);
-                return;
+                char *name = trim_whitespace(colon + 1);
+                safe_strcpy(cpu_name, name, sizeof(cpu_name));
+                cpu_name[sizeof(cpu_name) - 1] = '\0';
+                break;
             }
         }
     }
     
     fclose(file);
-    safe_strcpy(info->cpu, "Unknown", sizeof(info->cpu));
+    
+    char cpu_load_str[128] = "";  
+    const int bar_length = 8;
+    get_cpu_load_string(cpu_load_str, sizeof(cpu_load_str), bar_length);
+    int cpu_name_len = strnlen(cpu_name, sizeof(info->cpu) - 60);  // Leave space for load info
+    snprintf(info->cpu, sizeof(info->cpu), "%.*s%s", cpu_name_len, cpu_name, cpu_load_str);
     info->cpu[sizeof(info->cpu) - 1] = '\0';
 }
 
@@ -723,7 +733,6 @@ void get_gpu(system_info_t *info) {
     info->gpu[sizeof(info->gpu) - 1] = '\0';
 }
 
-// Helper function to build a colored progress bar
 static void build_progress_bar(char *bar, size_t bar_size, int percentage, int bar_length) {
     int filled_blocks = (percentage * bar_length) / 100;
     int bar_pos = 0;
@@ -753,28 +762,6 @@ static void build_progress_bar(char *bar, size_t bar_size, int percentage, int b
     snprintf(bar + bar_pos, bar_size - bar_pos, "\033[36m]\033[0m");
 }
 
-// Helper function to get CPU load string with progress bar
-static void get_cpu_load_string(char *cpu_load_str, size_t str_size, int bar_length) {
-    double loadavg[3];
-    cpu_load_str[0] = '\0';
-    
-    if (getloadavg(loadavg, 1) == -1) {
-        return;
-    }
-    
-    long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-    if (num_cores <= 0) {
-        return;
-    }
-    
-    int cpu_percentage = (int)((loadavg[0] / num_cores) * 100.0);
-    if (cpu_percentage > 100) cpu_percentage = 100;
-    
-    char cpu_bar[96];
-    build_progress_bar(cpu_bar, sizeof(cpu_bar), cpu_percentage, bar_length);
-    snprintf(cpu_load_str, str_size, " | \033[36mCPU Load\033[0m: %s%d%%", cpu_bar, cpu_percentage);
-}
-
 void get_memory(system_info_t *info) {
     struct sysinfo s_info;
     
@@ -800,11 +787,8 @@ void get_memory(system_info_t *info) {
     char progress_bar[128];
     build_progress_bar(progress_bar, sizeof(progress_bar), percentage, bar_length);
     
-    char cpu_load_str[192] = "";
-    get_cpu_load_string(cpu_load_str, sizeof(cpu_load_str), bar_length);
-    
-    snprintf(info->memory, sizeof(info->memory), "%.12s/%.12s %s%d%%%s", 
-             used_str, total_str, progress_bar, percentage, cpu_load_str);
+    snprintf(info->memory, sizeof(info->memory), "%.12s/%.12s %s%d%%", 
+             used_str, total_str, progress_bar, percentage);
     info->memory_bar[0] = '\0';
     info->memory[sizeof(info->memory) - 1] = '\0';
     info->memory_bar[sizeof(info->memory_bar) - 1] = '\0';
@@ -813,7 +797,6 @@ void get_memory(system_info_t *info) {
 void get_model(system_info_t *info) {
     char *result;
     
-    // Try DMI information
     result = read_file_content("/sys/devices/virtual/dmi/id/product_name");
     if (result && strnlen(result, sizeof(info->model)) > 0 && strcmp(result, "To Be Filled By O.E.M.") != 0) {
         char *vendor = read_file_content("/sys/devices/virtual/dmi/id/sys_vendor");
