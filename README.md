@@ -96,6 +96,8 @@ Artwork rework is ongoing. Distros with fixed artwork are:
 - Linux Mint
 - LMDE
 - Rocky Linux
+- Fedora
+- Ubuntu (only "ubuntu" for now, not kubuntu and others)
 
 Please send your corrected artwork or open an issue if your distro is displaying an ugly ASCII logo. Thanks!
 
@@ -144,6 +146,18 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 - Original neofetch by Dylan Araps
 - ASCII art collection from the original neofetch project
+
+## Donate
+
+## DONATE 
+
+I do all this work all by myself for free. If you value my work and would like to sponsor it, you can donate using the QR below (default is $5 USD) but any amount helps! 
+
+Thank you!!!
+
+
+![QR Binance](https://github.com/alexiarstein/kernelinstall.github.io/blob/main/IMG_3213.png)
+
 
 ## Contributing
 
