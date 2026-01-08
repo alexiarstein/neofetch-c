@@ -829,11 +829,13 @@ void get_memory(system_info_t *info) {
     unsigned long used_kb = (unsigned long)used_kb_raw;
 
     // Calculate percentage using the validated total
-    int percentage = 0;
-    double total_kb = (double)mem_total;
-    if (total_kb > 0.0) {
-        percentage = (int)((double)used_kb * 100.0 / total_kb);
+    unsigned long safe_total_kb = mem_total;
+    if (safe_total_kb == 0) {
+        safe_total_kb = 1; // Fallback for analyzers; practical execution never hits this
     }
+    unsigned long long used_scaled = (unsigned long long)used_kb * 100ULL;
+    int percentage = (int)(used_scaled / safe_total_kb);
+    if (percentage > 100) percentage = 100;
 
     // Convert from kB to bytes for display
     unsigned long total_mem = mem_total * 1024;
