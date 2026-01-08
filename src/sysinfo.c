@@ -819,18 +819,25 @@ void get_memory(system_info_t *info) {
         safe_set_string(info->memory_bar, "Unknown", sizeof(info->memory_bar));
         return;
     }
-    
-    // Calculate percentage using kB values to avoid tainted value issues
-    // This is done before converting to bytes
+
+    // Compute used memory in kB using signed arithmetic to avoid underflow
+    long long cache_total = (long long)cached + (long long)s_reclaimable - (long long)shmem;
+    if (cache_total < 0) cache_total = 0;
+    long long used_kb_raw = (long long)mem_total - (long long)mem_free - (long long)buffers - cache_total;
+    if (used_kb_raw < 0) used_kb_raw = 0;
+    if (used_kb_raw > (long long)mem_total) used_kb_raw = (long long)mem_total;
+    unsigned long used_kb = (unsigned long)used_kb_raw;
+
+    // Calculate percentage using the validated total
     int percentage = 0;
-    if (mem_total > 0) {
-        unsigned long used_kb = mem_total - mem_free - buffers - (cached - shmem) - s_reclaimable;
-        percentage = (int)((double)used_kb / (double)mem_total * 100.0);
+    double total_kb = (double)mem_total;
+    if (total_kb > 0.0) {
+        percentage = (int)((double)used_kb * 100.0 / total_kb);
     }
-    
+
     // Convert from kB to bytes for display
     unsigned long total_mem = mem_total * 1024;
-    unsigned long used_mem = (mem_total - mem_free - buffers - (cached - shmem) - s_reclaimable) * 1024;
+    unsigned long used_mem = used_kb * 1024;
     
     char used_str[32], total_str[32];
     format_memory(used_mem, used_str, sizeof(used_str));
