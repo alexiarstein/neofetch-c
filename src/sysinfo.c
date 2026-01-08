@@ -820,21 +820,21 @@ void get_memory(system_info_t *info) {
         return;
     }
     
-    // Convert from kB to bytes
-    unsigned long total_mem = mem_total * 1024;
+    // Calculate percentage using kB values to avoid tainted value issues
+    // This is done before converting to bytes
+    int percentage = 0;
+    if (mem_total > 0) {
+        unsigned long used_kb = mem_total - mem_free - buffers - (cached - shmem) - s_reclaimable;
+        percentage = (int)((double)used_kb / (double)mem_total * 100.0);
+    }
     
-    // Use htop-style calculation: MemTotal - MemFree - Buffers - (Cached - Shmem) - SReclaimable
-    // This matches what htop and other tools typically show
+    // Convert from kB to bytes for display
+    unsigned long total_mem = mem_total * 1024;
     unsigned long used_mem = (mem_total - mem_free - buffers - (cached - shmem) - s_reclaimable) * 1024;
     
     char used_str[32], total_str[32];
     format_memory(used_mem, used_str, sizeof(used_str));
     format_memory(total_mem, total_str, sizeof(total_str));
-    
-    int percentage = 0;
-    if (total_mem > 0) {
-        percentage = (int)((double)used_mem / (double)total_mem * 100.0);
-    }
     
     const int bar_length = 8;
     char progress_bar[128];
