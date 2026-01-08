@@ -801,15 +801,16 @@ void get_memory(system_info_t *info) {
         return;
     }
     
-    unsigned long mem_total = 0, mem_available = 0, mem_free = 0, buffers = 0, cached = 0;
+    unsigned long mem_total = 0, mem_free = 0, buffers = 0, cached = 0, s_reclaimable = 0, shmem = 0;
     char line[256];
     
     while (fgets(line, sizeof(line), fp)) {
         if (sscanf(line, "MemTotal: %lu kB", &mem_total) == 1) continue;
-        if (sscanf(line, "MemAvailable: %lu kB", &mem_available) == 1) continue;
         if (sscanf(line, "MemFree: %lu kB", &mem_free) == 1) continue;
         if (sscanf(line, "Buffers: %lu kB", &buffers) == 1) continue;
         if (sscanf(line, "Cached: %lu kB", &cached) == 1) continue;
+        if (sscanf(line, "SReclaimable: %lu kB", &s_reclaimable) == 1) continue;
+        if (sscanf(line, "Shmem: %lu kB", &shmem) == 1) continue;
     }
     fclose(fp);
     
@@ -821,21 +822,16 @@ void get_memory(system_info_t *info) {
     
     // Convert from kB to bytes
     unsigned long total_mem = mem_total * 1024;
-    unsigned long used_mem;
     
-    // Use MemAvailable if available (kernel 3.14+), otherwise calculate manually
-    if (mem_available > 0) {
-        used_mem = (mem_total - mem_available) * 1024;
-    } else {
-        // Fallback for older kernels: MemTotal - MemFree - Buffers - Cached
-        used_mem = (mem_total - mem_free - buffers - cached) * 1024;
-    }
+    // Use htop-style calculation: MemTotal - MemFree - Buffers - (Cached - Shmem) - SReclaimable
+    // This matches what htop and other tools typically show
+    unsigned long used_mem = (mem_total - mem_free - buffers - (cached - shmem) - s_reclaimable) * 1024;
     
     char used_str[32], total_str[32];
     format_memory(used_mem, used_str, sizeof(used_str));
     format_memory(total_mem, total_str, sizeof(total_str));
     
-    int percentage = (int)((double)used_mem / (double)total_mem * 100.0);
+    int percentage = (total_mem > 0) ? (int)((double)used_mem / (double)total_mem * 100.0) : 0;
     
     const int bar_length = 8;
     char progress_bar[128];
