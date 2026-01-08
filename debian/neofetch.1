@@ -1,0 +1,26 @@
+.TH NEOFETCH 1 "January 2026" "neofetch-c 0.1.0" "User Commands"
+.SH NAME
+neofetch \- display system information with ASCII art
+.SH SYNOPSIS
+.B neofetch
+.SH DESCRIPTION
+.B neofetch
+collects basic system information such as operating system, kernel,
+uptime, packages, display, and hardware details, then prints the results
+next to a colorized ASCII logo for the detected distribution. The binary
+comes from the neofetch-c project, a fast reimplementation of the original
+bash-based neofetch utility.
+.PP
+The current build focuses on sensible defaults and does not expose command
+line options or configuration files. Simply run the command to display the
+summary.
+.SH EXIT STATUS
+The command exits with status 0 when information is displayed successfully.
+A non-zero status indicates an unexpected failure while gathering data.
+.SH AUTHORS
+Written by Alexia Michelle.
+.SH REPORTING BUGS
+Report issues at <https://github.com/alexiarstein/neofetch-c>.
+.SH SEE ALSO
+.BR uname (1),
+.BR lsb_release (1)

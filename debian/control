@@ -1,0 +1,16 @@
+Source: neofetch-c
+Section: misc
+Priority: optional
+Maintainer: Alexia Michelle <alexia@goldendoglinux.org>
+Build-Depends: debhelper-compat (= 13), gcc, make
+Standards-Version: 4.7.0
+Homepage: https://github.com/alexiarstein/neofetch-c
+Rules-Requires-Root: no
+
+Package: neofetch-c
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Fast system information tool with ASCII art
+ Neofetch-C is a fast reimplementation of the neofetch system information
+ utility in C. It displays key system details alongside colorful ASCII art
+ logos for your distribution, optimized for speed and low resource usage.

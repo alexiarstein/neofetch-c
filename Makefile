@@ -7,9 +7,11 @@
 # (at your option) any later version.
 
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11 -D_GNU_SOURCE -Iinclude
-HARDENING_CFLAGS = -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wformat -Werror=format-security -fPIE
-LDFLAGS = -Wl,-z,relro -Wl,-z,now -pie
+
+override CFLAGS += -Wall -Wextra -std=c11 -fstack-protector-strong -fPIE
+override CPPFLAGS += -D_GNU_SOURCE -D_FORTIFY_SOURCE=2 -Iinclude
+override LDFLAGS += -Wl,-z,relro -Wl,-z,now -pie
+override CFLAGS += -Wformat -Werror=format-security
 SRCDIR = src
 OBJDIR = build
 INCDIR = include
@@ -23,10 +25,10 @@ OBJECTS = $(SOURCES:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
 all: $(TARGET)
 
 $(TARGET): $(OBJECTS) | $(OBJDIR)
-	$(CC) $(OBJECTS) $(LDFLAGS) -o $@
+	$(CC) $(LDFLAGS) -o $@ $(OBJECTS)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
-	$(CC) $(CFLAGS) $(HARDENING_CFLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 $(OBJDIR):
 	mkdir -p $(OBJDIR)
