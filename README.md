@@ -89,6 +89,16 @@ The application will automatically detect your system information and display it
 
 ## Implementation Details
 
+Artwork rework is ongoing. Distros with fixed artwork are:
+- Debian
+- Red Hat Enterprise Linux
+- GoldenDog Linux
+- Linux Mint
+- LMDE
+- Rocky Linux
+
+Please send your corrected artwork or open an issue if your distro is displaying an ugly ASCII logo. Thanks!
+
 ### System Information Gathering
 
 The application gathers system information through various methods:
