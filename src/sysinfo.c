@@ -831,7 +831,10 @@ void get_memory(system_info_t *info) {
     format_memory(used_mem, used_str, sizeof(used_str));
     format_memory(total_mem, total_str, sizeof(total_str));
     
-    int percentage = (total_mem > 0) ? (int)((double)used_mem / (double)total_mem * 100.0) : 0;
+    int percentage = 0;
+    if (total_mem > 0) {
+        percentage = (int)((double)used_mem / (double)total_mem * 100.0);
+    }
     
     const int bar_length = 8;
     char progress_bar[128];
