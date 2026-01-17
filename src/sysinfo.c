@@ -620,7 +620,7 @@ void get_window_manager(system_info_t *info) {
             safe_set_string(info->wm, "Unknown", sizeof(info->wm));
         }
     } else {
-        result = execute_command("ps aux | grep -E '(kwin|mutter|xfwm|openbox|i3|bspwm|awesome|dwm|fluxbox|jwm|herbstluftwm|qtile|xmonad|spectrwm)' | grep -v grep | head -1 | awk '{print $11}' | xargs basename");
+        result = execute_command("ps aux | grep -E '(kwin|mutter|xfwm|openbox|i3|bspwm|awesome|dwm|fluxbox|jwm|herbstluftwm|qtile|xmonad|spectrwm)' | grep -v grep | head -1 | awk '{print $11}' | xargs -r basename");
         if (result && strnlen(result, sizeof(info->wm)) > 0) {
             format_wm_name(result, info->wm, sizeof(info->wm));
             return;
